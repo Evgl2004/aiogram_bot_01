@@ -53,7 +53,7 @@ class Database:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("✅ Database tables created successfully")
     
-    async def add_user(self, user_id: int, username: Optional[str] = None, 
+    async def add_user(self, user_id: int, username: Optional[str] = None,
                       first_name: Optional[str] = None, last_name: Optional[str] = None) -> User:
         """Добавление нового пользователя"""
         async with self.session_maker() as session:
@@ -152,6 +152,30 @@ class Database:
             )
             return result.scalars().all()
 
+    async def update_user(self, user_id: int, **kwargs) -> Optional[User]:
+        """
+        Обновляет поля пользователя.
+        Принимает ID пользователя и именованные аргументы — названия полей и новые значения.
+        Возвращает обновлённого пользователя или None, если пользователь не найден.
+        """
+        async with self.session_maker() as session:
+            user = await session.get(User, user_id)
+            if not user:
+                logger.warning(f"Пользователь user_id={user_id} не найден для обновления!")
+                return None
+
+            # Обновляем только переданные атрибуты
+            for key, value in kwargs.items():
+                if hasattr(user, key):
+                    setattr(user, key, value)
+                else:
+                    logger.warning(f"Попытка обновить несуществующее поле {key} для Пользователя user_id={user_id}")
+
+            user.updated_at = datetime.utcnow()  # обновляем timestamp
+            await session.commit()
+            await session.refresh(user)
+            return user
+
 
 # Создаем глобальный экземпляр базы данных
-db = Database() 
+db = Database()
