@@ -90,3 +90,34 @@ def get_notifications_keyboard() -> InlineKeyboardMarkup:
     ))
 
     return builder.as_markup()
+
+
+def get_review_keyboard() -> InlineKeyboardMarkup:
+    """
+    Возвращает клавиатуру для подтверждения анкеты.
+    Кнопки: "✅ Всё верно" и "✏️ Изменить".
+    """
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="✅ Всё верно", callback_data="review_correct"))
+    builder.row(InlineKeyboardButton(text="✏️ Изменить", callback_data="review_edit"))
+    return builder.as_markup()
+
+
+def get_edit_choice_keyboard() -> InlineKeyboardMarkup:
+    """
+    Возвращает клавиатуру для выбора поля, которое нужно отредактировать.
+    Включает кнопки для каждого редактируемого поля и кнопку отмены.
+    """
+    builder = InlineKeyboardBuilder()
+    fields = [
+        ("👤 Имя", "edit_first_name"),
+        ("👥 Фамилия", "edit_last_name"),
+        ("⚥ Пол", "edit_gender"),
+        ("🎂 Дата рождения", "edit_birth_date"),
+        ("📧 Email", "edit_email"),
+    ]
+    for text, callback in fields:
+        builder.row(InlineKeyboardButton(text=text, callback_data=callback))
+    builder.row(InlineKeyboardButton(text="🔙 Отмена", callback_data="edit_cancel"))
+    return builder.as_markup()

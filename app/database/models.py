@@ -106,15 +106,14 @@ class User(Base):
     phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     """
-    Полное имя пользователя, которое он введёт сам.
-    Может отличаться от first_name/last_name (например, Иван Петров).
+    Имя, введённое пользователем при регистрации (отдельно от Telegram first_name).
     """
-    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    first_name_input: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     """
-    Предпочитаемое Имя (первое слово из full_name, для обращений)
+    Фамилия, введённая пользователем при регистрации (отдельно от Telegram last_name).
     """
-    preferred_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    last_name_input: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     """
     Пол пользователя.
