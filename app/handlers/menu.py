@@ -111,7 +111,7 @@ async def process_vacancies(callback: types.CallbackQuery, state: FSMContext):
     text = (
         "💼 *Вакансии*\n\n"
         "Ждем классных, ответственных, позитивных, энергичных и профессиональных "
-        "сотрудников в дружные команды заведений «ЕрмолаевЪ»!\n\n"
+        "сотрудников в дружные команды наших заведений!\n\n"
         "Гарантируем:\n"
         "• крепкие коллективы, в которых весело работать и приятно отдыхать после смены\n"
         "• с нами – непрерывное профессиональное развитие\n"
@@ -119,7 +119,7 @@ async def process_vacancies(callback: types.CallbackQuery, state: FSMContext):
         "• достойный доход и щедрые чаевые\n\n"
         "Если чувствуешь, что хочешь работать в заведениях самого уютного и надёжного "
         "бренда Тюмени – переходи по ссылке и оставляй заявку!\n\n"
-        "👉 [Посмотреть все вакансии](https://hh.ru/employer/ermolaev) (ссылка будет заменена)"
+        "👉 [Посмотреть все вакансии](https://team.sobolevalliance.su/vacancy)"
     )
     await callback.message.edit_text(
         text,
@@ -177,14 +177,13 @@ async def process_contacts(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.answer()
     text = (
-        "📧 *Контакты*\n\n"
+        "📧 Контакты\n\n"
         "Почта для связи: brand@ermolaev.beer\n"
         "Сайт: https://ermolaev.beer\n"
         "Соцсети: @ermolaev_beer"
     )
     await callback.message.edit_text(
         text,
-        parse_mode="Markdown",
         reply_markup=get_back_to_support_keyboard()
     )
 
@@ -200,7 +199,10 @@ async def process_back_to_main(callback: types.CallbackQuery, state: FSMContext)
     user = await db.get_user(callback.from_user.id)
     name = user.first_name_input or "Гость"
     text = f"👋 {name}, вы в главном меню.\nВыберите раздел:"
-    await callback.message.edit_text(text, reply_markup=get_main_menu_keyboard())
+    # Отправляем новое сообщение с главным меню
+    await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
+    # Удаляем текущее сообщение (с которого пришёл callback)
+    await callback.message.delete()
 
 
 @router.callback_query(lambda c: c.data == "back_to_support")
