@@ -16,6 +16,7 @@ from app.keyboards.registration import (
     get_edit_choice_keyboard
 )
 from app.states.registration import Registration
+from app.handlers.menu import show_main_menu
 
 import re
 from datetime import datetime, date
@@ -559,17 +560,13 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     user = await db.get_user(user_id)
     name = user.first_name_input or "Гость"
 
-    # Отправляем финальное сообщение с главным меню (пока заглушка)
-    await callback.answer(
-        f"🎉 Поздравляем, {name}! Вы успешно зарегистрированы в программе лояльности.\n\n"
-        f"📋 Главное меню:\n"
-        f"• 💰 Мой баланс\n"
-        f"• 🔥 Специальные предложения\n"
-        f"• 🌐 Сайты заведений"
+    # Вызываем главное меню
+    await show_main_menu(
+        chat_id=callback.message.chat.id,
+        bot=callback.bot,
+        state=state,
+        user_name=name
     )
-
-    # Очищаем состояние FSM, регистрация завершена
-    await state.clear()
 
 
 # Функция показа анкеты
