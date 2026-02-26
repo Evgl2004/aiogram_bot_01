@@ -12,29 +12,21 @@ class Registration(StatesGroup):
     Порядок состояний соответствует последовательности шагов.
     """
 
-    # Ожидание нажатия на кнопку «Согласен» после ознакомления с правилами
-    waiting_for_rules_consent = State()
+    waiting_for_rules_consent = State()       # ожидание согласия с правилами
+    waiting_for_contact = State()              # ожидание отправки контакта
+    waiting_for_first_name = State()           # ожидание ввода имени
+    waiting_for_last_name = State()            # ожидание ввода фамилии
+    waiting_for_gender = State()                # выбор пола
+    waiting_for_birth_date = State()            # ввод даты рождения
+    waiting_for_email = State()                 # ввод email
 
-    # Ожидание отправки контакта (номера телефона) через специальную кнопку
-    waiting_for_contact = State()
+    # Состояния для ревью и редактирования
+    waiting_for_review = State()                # показ анкеты, ожидание подтверждения
+    waiting_for_edit_choice = State()           # выбор поля для редактирования
+    waiting_for_edit_first_name = State()       # редактирование имени
+    waiting_for_edit_last_name = State()        # редактирование фамилии
+    waiting_for_edit_gender = State()           # редактирование пола
+    waiting_for_edit_birth_date = State()       # редактирование даты рождения
+    waiting_for_edit_email = State()            # редактирование email
 
-    # Ожидание ввода имени и фамилии (текстовое сообщение)
-    waiting_for_name = State()
-
-    # Ожидание выбора "Да/Нет" или нового текста
-    waiting_for_name_confirm = State()
-
-    # Ожидание ввода нового обращения
-    waiting_for_name_edit = State()
-
-    # Ожидание выбора пола (через кнопки внутри сообщения)
-    waiting_for_gender = State()
-
-    # Ожидание ввода даты рождения (в формате ДД.ММ.ГГГГ)
-    waiting_for_birth_date = State()
-
-    # Ожидание ввода email
-    waiting_for_email = State()
-
-    # Состояние для отдельного согласия на уведомления
-    waiting_for_notifications_consent = State()
+    waiting_for_notifications_consent = State() # согласие на уведомления

@@ -4,15 +4,22 @@
 
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
 from loguru import logger
 
 from app.database import db
-from app.keyboards.registration import get_contact_keyboard, get_gender_keyboard, get_notifications_keyboard
+from app.keyboards.registration import (
+    get_contact_keyboard,
+    get_gender_keyboard,
+    get_notifications_keyboard,
+    get_review_keyboard,
+    get_edit_choice_keyboard
+)
 from app.states.registration import Registration
 
 import re
 from datetime import datetime, date
+from typing import Union
 
 router = Router()
 
@@ -30,8 +37,8 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext)
     await callback.message.edit_reply_markup(reply_markup=None)
 
     await callback.message.answer(
-        "Отлично! Теперь, чтобы подключиться к программе лояльности, "
-        "нажми кнопку «Поделиться контактом».",
+        "✅ Отлично! Правила приняты. Теперь, чтобы подключиться к программе лояльности, "
+        "нажми кнопку «📱 Поделиться контактом».",
         reply_markup=get_contact_keyboard()
     )
     await state.set_state(Registration.waiting_for_contact)
@@ -53,9 +60,16 @@ async def process_contact(message: types.Message, state: FSMContext) -> None:
     # но дополнительная проверка не помешает)
     if contact.user_id != user_id:
         logger.warning(f"⚠️ Пользователь user_id={user_id} пытался отправить чужой контакт")
-        await message.answer("Пожалуйста, отправьте свой собственный контакт, используя кнопку ниже.")
+
+        await message.answer(
+            "⚠️ Пожалуйста, отправьте свой собственный контакт, используя кнопку ниже."
+        )
+
         # Возвращаем клавиатуру с кнопкой контакта
-        await message.answer("Нажмите кнопку «Поделиться контактом»:", reply_markup=get_contact_keyboard())
+        await message.answer(
+            "📱 Нажмите кнопку «Поделиться контактом»:",
+            reply_markup=get_contact_keyboard()
+        )
         return
 
     # Сохраняем номер телефона в базу данных
@@ -70,12 +84,13 @@ async def process_contact(message: types.Message, state: FSMContext) -> None:
 
     # Подтверждаем получение
     await message.answer(
-        "Спасибо! Номер телефона сохранён.\n\n"
-        "Теперь, пожалуйста, напишите ваше имя и фамилию (как вас представлять)."
+        "✅ Спасибо! Номер телефона сохранён.\n\n"
+        "✍️ Теперь, пожалуйста, напишите ваше имя.",
+        reply_markup=ReplyKeyboardRemove()
     )
 
     # Переходим к следующему состоянию — запрос имени
-    await state.set_state(Registration.waiting_for_name)
+    await state.set_state(Registration.waiting_for_first_name)
 
 
 # Обработчик, если пользователь в состоянии waiting_for_contact (ожидание получения контакта от пользователя),
@@ -89,161 +104,106 @@ async def process_contact_invalid(message: types.Message) -> None:
     user_id = message.from_user.id
     logger.info(f"Пользователь user_id={user_id} отправил сообщение без контакта, ожидая контакта")
     await message.answer(
-        "Пожалуйста, нажмите кнопку «Поделиться контактом» на клавиатуре, "
+        "📱 Пожалуйста, нажмите кнопку «Поделиться контактом» на клавиатуре, "
         "чтобы отправить свой номер телефона."
     )
 
 
-# Обработчик для получения имени (состояние waiting_for_name)
-@router.message(Registration.waiting_for_name)
-async def process_name(message: types.Message, state: FSMContext) -> None:
+# Обработчик для получения имени
+@router.message(Registration.waiting_for_first_name)
+async def process_first_name(message: types.Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод имени пользователя.
     Принимает текстовое сообщение, проверяет:
     - что оно не пустое;
     - содержит только буквы (русские/латиница), пробелы и дефисы (для двойных имён);
     - после проверки очищает от лишних пробелов.
-    Сохраняет полное имя в поле full_name, извлекает первое слово для preferred_name,
-    затем переводит в состояние выбора пола (waiting_for_gender).
+    Сохраняет имя, затем переводит в состояние ввода фамилии.
     """
 
     user_id = message.from_user.id
     # Получаем текст сообщения, удаляем лишние пробелы
-    name_text = message.text.strip() if message.text else ""
+    first_name_text = message.text.strip() if message.text else ""
 
-    logger.info(f"Пользователь user_id={user_id} вводит имя: '{name_text}'")
+    logger.info(f"Пользователь user_id={user_id} вводит имя: '{first_name_text}'")
 
     # Проверяем, что имя не пустое (и не состоит из одних пробелов)
-    if not name_text:
-        await message.answer("Имя не может быть пустым. Пожалуйста, напишите ваше имя.")
+    if not first_name_text:
+        await message.answer(
+            "❌ Имя не может быть пустым. Пожалуйста, напишите ваше имя."
+        )
         # Остаёмся в том же состоянии, чтобы пользователь попробовал снова
         return
 
     # --- Валидация допустимых символов ---
     # Разрешены: буквы (латиница и кириллица, включая 'ё'), пробелы, дефис.
     # Знак ^ означает начало строки, $ — конец, [ ... ]+ — один или более допустимых символов.
-    if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', name_text):
+    if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', first_name_text):
         await message.answer(
-            "Имя может содержать только буквы (латиница и кириллица), пробелы и дефисы.\n"
-            "Пожалуйста, введите корректное имя (например, 'Анна' или 'Сергей-Петр')."
+            "⚠️ Имя может содержать только буквы (латиница и кириллица), пробелы и дефисы.\n"
+            "✍️ Пожалуйста, введите корректное имя (например, 'Анна' или 'Сергей-Петр')."
         )
         return  # остаёмся в том же состоянии
 
     # --- Дополнительная очистка: заменяем множественные пробелы на один ---
     # Например, "Иван   Петров" -> "Иван Петров"
-    name_cleaned = re.sub(r'\s+', ' ', name_text).strip()
-
-    # Извлекаем первое слово для обращения
-    # Проверяем, что строка name_cleaned не пустая
-    if name_cleaned:
-        # Разбиваем строку по пробелам на отдельные слова
-        words = name_cleaned.split()
-        # Берём первое слово (индекс 0)
-        preferred_suggested = words[0]
-    else:
-        # Если строка пустая, то и предпочитаемое имя будет пустым
-        preferred_suggested = name_cleaned  # это пустая строка
+    first_name_cleaned = re.sub(r'\s+', ' ', first_name_text).strip()
 
     # Сохраняем полное имя в базу (пока без preferred_name)
-    await db.update_user(user_id, full_name=name_cleaned)
-
-    # Сохраняем предложенное обращение в FSM (не в БД, только для этого сеанса)
-    await state.update_data(preferred_suggested=preferred_suggested, full_name=name_cleaned)
-
-    # Создаём клавиатуру для подтверждения
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Да, верно", callback_data="confirm_yes")],
-        [InlineKeyboardButton(text="✏️ Нет, изменить", callback_data="confirm_edit")]
-    ])
+    await db.update_user(user_id, first_name_input=first_name_cleaned)
 
     await message.answer(
-        f"Вас можно называть *{preferred_suggested}*?\n\n"
-        f"Если хотите изменить обращение, нажмите «Нет, изменить».",
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
-
-    await state.set_state(Registration.waiting_for_name_confirm)
-
-
-@router.callback_query(Registration.waiting_for_name_confirm, lambda c: c.data == "confirm_yes")
-async def process_name_confirm_yes(callback: types.CallbackQuery, state: FSMContext) -> None:
-    """
-    Пользователь подтвердил предложенное обращение.
-    Сохраняем preferred_name в БД и переходим к выбору пола.
-    """
-    user_id = callback.from_user.id
-    data = await state.get_data()
-    preferred_suggested = data.get("preferred_suggested", "")
-
-    # Сохраняем предпочитаемое обращение
-    await db.update_user(user_id, preferred_name=preferred_suggested)
-
-    await callback.answer()
-    await callback.message.edit_reply_markup(reply_markup=None)  # убираем кнопки
-
-    # Подтверждаем получение и показываем клавиатуру для выбора пола
-    await callback.message.answer(
-        f"Приятно познакомиться, {preferred_suggested}!\n\n"
-        "Теперь укажите ваш пол:",
-        reply_markup=get_gender_keyboard()
+        "✅ Спасибо! Теперь напишите вашу фамилию."
     )
 
     # Переводим пользователя в следующее состояние
-    await state.set_state(Registration.waiting_for_gender)
+    await state.set_state(Registration.waiting_for_last_name)
 
 
-@router.callback_query(Registration.waiting_for_name_confirm, lambda c: c.data == "confirm_edit")
-async def process_name_confirm_edit(callback: types.CallbackQuery, state: FSMContext) -> None:
+# Обработчик для получения фамилии
+@router.message(Registration.waiting_for_last_name)
+async def process_last_name(message: types.Message, state: FSMContext) -> None:
     """
-    Пользователь хочет изменить обращение.
-    Запрашиваем новый вариант.
+    Обрабатывает ввод фамилии пользователя.
+    Принимает текстовое сообщение, проверяет:
+    - что оно не пустое;
+    - содержит только буквы (русские/латиница), пробелы и дефисы (для двойных имён);
+    - после проверки очищает от лишних пробелов.
+    Сохраняет имя, затем переводит в состояние ввода пола.
     """
-    await callback.answer()
-    await callback.message.edit_reply_markup(reply_markup=None)
 
-    await callback.message.answer(
-        "Пожалуйста, напишите, как к вам обращаться (например, только имя)."
-    )
-
-    # Переводим пользователя в следующее состояние
-    await state.set_state(Registration.waiting_for_name_edit)
-
-
-@router.message(Registration.waiting_for_name_edit)
-async def process_name_edit(message: types.Message, state: FSMContext) -> None:
-    """
-    Принимает новый вариант обращения, проверяет и сохраняет.
-    """
     user_id = message.from_user.id
-    new_preferred = message.text.strip() if message.text else ""
+    # Получаем текст сообщения, удаляем лишние пробелы
+    last_name_text = message.text.strip() if message.text else ""
 
-    if not new_preferred:
-        await message.answer("Обращение не может быть пустым. Пожалуйста, введите текст.")
-        return
+    logger.info(f"Пользователь user_id={user_id} вводит фамилию: '{last_name_text}'")
 
-    # Можно наложить те же ограничения (буквы, пробелы, дефисы)
-    if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', new_preferred):
+    # Проверяем, что имя не пустое (и не состоит из одних пробелов)
+    if not last_name_text:
         await message.answer(
-            "Обращение может содержать только буквы, пробелы и дефисы.\n"
-            "Пожалуйста, введите корректный вариант."
+            "❌ Фамилия не может быть пустой. Пожалуйста, напишите вашу фамилию."
         )
+        # Остаёмся в том же состоянии, чтобы пользователь попробовал снова
         return
 
-    # Очищаем
-    new_preferred_cleaned = re.sub(r'\s+', ' ', new_preferred).strip()
+    # --- Валидация допустимых символов ---
+    # Разрешены: буквы (латиница и кириллица, включая 'ё'), пробелы, дефис.
+    # Знак ^ означает начало строки, $ — конец, [ ... ]+ — один или более допустимых символов.
+    if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', last_name_text):
+        await message.answer(
+            "⚠️ Фамилия может содержать только буквы (латиница и кириллица), пробелы и дефисы.\n"
+            "✍️ Пожалуйста, введите корректную фамилию (например, 'Петров' или 'Петров-Сидоров')."
+        )
+        return  # остаёмся в том же состоянии
 
-    # Сохраняем в БД
-    await db.update_user(user_id, preferred_name=new_preferred_cleaned)
+    # --- Дополнительная очистка: заменяем множественные пробелы на один ---
+    last_name_cleaned = re.sub(r'\s+', ' ', last_name_text).strip()
 
-    # Получаем полное имя из данных (на всякий случай)
-    data = await state.get_data()
-    full_name = data.get("full_name", "")
+    # Сохраняем полное имя в базу (пока без preferred_name)
+    await db.update_user(user_id, last_name_input=last_name_cleaned)
 
-    # Подтверждаем получение и показываем клавиатуру для выбора пола
     await message.answer(
-        f"Приятно познакомиться, {new_preferred_cleaned}!\n\n"
-        "Теперь укажите ваш пол:",
+        "👍 Отлично! Теперь укажите ваш пол:",
         reply_markup=get_gender_keyboard()
     )
 
@@ -282,13 +242,14 @@ async def process_gender(callback: types.CallbackQuery, state: FSMContext) -> No
 
     # Отправляем сообщение с запросом даты рождения
     await callback.message.answer(
-        "Спасибо! Теперь укажите вашу дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990)."
+        "✅ Спасибо! Теперь укажите вашу дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990)."
     )
 
     # Переводим пользователя в следующее состояние
     await state.set_state(Registration.waiting_for_birth_date)
 
 
+# Обработчик ввода дня рождения (состояние waiting_for_gender)
 @router.message(Registration.waiting_for_birth_date)
 async def process_birth_date(message: types.Message, state: FSMContext) -> None:
     """
@@ -306,17 +267,17 @@ async def process_birth_date(message: types.Message, state: FSMContext) -> None:
     # Проверка формата регулярным выражением (не обязательна, но помогает отсеять совсем неподходящее)
     if not re.fullmatch(r'^\d{2}\.\d{2}\.\d{4}$', text):
         await message.answer(
-            "Пожалуйста, введите дату в формате ДД.ММ.ГГГГ (например, 25.12.1990)."
+            "❌ Пожалуйста, введите дату в формате ДД.ММ.ГГГГ (например, 25.12.1990)."
         )
         return
 
-    # Пытаемся распарсить дату
+    # Пытаемся разобрать дату
     try:
         birth = datetime.strptime(text, "%d.%m.%Y").date()
     except ValueError:
         # Если дата не существует (например, 31.02.2020)
         await message.answer(
-            "Введена некорректная дата. Пожалуйста, проверьте правильность числа, месяца и года."
+            "⚠️ Введена некорректная дата. Пожалуйста, проверьте правильность числа, месяца и года."
         )
         return
 
@@ -325,15 +286,21 @@ async def process_birth_date(message: types.Message, state: FSMContext) -> None:
     age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
 
     if birth > today:
-        await message.answer("Дата рождения не может быть в будущем. Пожалуйста, введите корректную дату.")
+        await message.answer(
+            "⚠️ Дата рождения не может быть в будущем. Пожалуйста, введите корректную дату."
+        )
         return
 
     if age < 18:
-        await message.answer("К сожалению, программа лояльности доступна только для гостей старше 18 лет.")
+        await message.answer(
+            "⛔ К сожалению, программа лояльности доступна только для гостей старше 18 лет."
+        )
         return
 
     if age > 100:
-        await message.answer("Пожалуйста, введите корректную дату рождения.")
+        await message.answer(
+            "⛔ Пожалуйста, введите корректную дату рождения."
+        )
         return
 
     # Сохраняем дату в базу данных
@@ -341,8 +308,8 @@ async def process_birth_date(message: types.Message, state: FSMContext) -> None:
 
     # Подтверждаем и переходим к запросу email
     await message.answer(
-        "Спасибо! Дата рождения сохранена.\n\n"
-        "Теперь, пожалуйста, укажите ваш адрес электронной почты."
+        "✅ Спасибо! Дата рождения сохранена.\n\n"
+        "📧 Теперь, пожалуйста, укажите ваш адрес электронной почты."
     )
 
     # Переводим в состояние ожидания email
@@ -365,29 +332,194 @@ async def process_email(message: types.Message, state: FSMContext) -> None:
 
     # Проверка на пустой ввод
     if not email:
-        await message.answer("Email не может быть пустым. Пожалуйста, введите ваш email.")
+        await message.answer(
+            "❌ Email не может быть пустым. Пожалуйста, введите ваш email."
+        )
         return
 
     # Простая валидация email: наличие @ и точки после @
     # Более строгую проверку можно сделать с помощью библиотеки email-validator, но для простоты достаточно
     if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
         await message.answer(
-            "Пожалуйста, введите корректный email-адрес, например: example@domain.com"
+            "⚠️ Пожалуйста, введите корректный email-адрес, например: example@domain.com"
         )
         return
 
     # Сохраняем email в базу данных
     await db.update_user(user_id, email=email)
 
-    # Переходим к запросу согласия на уведомления
-    await message.answer(
-        "Мы хотим радовать вас уникальными предложениями и акциями.\n"
+    # Вместо перехода к уведомлениям показываем анкету
+    await show_profile_review(message, state)
+
+
+# --- Обработчики ревью анкеты ---
+@router.callback_query(Registration.waiting_for_review, lambda c: c.data == "review_correct")
+async def process_review_correct(callback: types.CallbackQuery, state: FSMContext):
+    """
+    Пользователь подтвердил анкету -> переходим к согласию на уведомления.
+    """
+
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        "📢 Мы хотим радовать вас уникальными предложениями и акциями.\n"
         "Ознакомьтесь с условиями получения уведомлений по ссылке ниже и сделайте выбор:",
         reply_markup=get_notifications_keyboard()
     )
-
-    # Переводим в состояние ожидания согласия на уведомления
     await state.set_state(Registration.waiting_for_notifications_consent)
+
+
+@router.callback_query(Registration.waiting_for_review, lambda c: c.data == "review_edit")
+async def process_review_edit(callback: types.CallbackQuery, state: FSMContext):
+    """
+    Пользователь хочет что-то изменить -> показываем выбор поля.
+    """
+
+    await callback.answer()
+    await callback.message.edit_text(
+        "🔧 Выберите, что хотите исправить:",
+        reply_markup=get_edit_choice_keyboard()
+    )
+    await state.set_state(Registration.waiting_for_edit_choice)
+
+
+# --- Обработчик выбора поля для редактирования ---
+@router.callback_query(Registration.waiting_for_edit_choice)
+async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
+    data = callback.data
+    await callback.answer()
+
+    if data == "edit_cancel":
+        await show_profile_review(callback, state)
+        return
+
+    if data == "edit_first_name":
+        new_state = Registration.waiting_for_edit_first_name
+        msg = "✍️ Введите новое имя:"
+    elif data == "edit_last_name":
+        new_state = Registration.waiting_for_edit_last_name
+        msg = "✍️ Введите новую фамилию:"
+    elif data == "edit_gender":
+        new_state = Registration.waiting_for_edit_gender
+        await callback.message.edit_text(
+            "Выберите ваш пол:",
+            reply_markup=get_gender_keyboard()
+        )
+        await state.set_state(new_state)
+        return
+    elif data == "edit_birth_date":
+        new_state = Registration.waiting_for_edit_birth_date
+        msg = "📅 Введите новую дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990):"
+    elif data == "edit_email":
+        new_state = Registration.waiting_for_edit_email
+        msg = "📧 Введите новый email:"
+    else:
+        await show_profile_review(callback, state)
+        return
+
+    await callback.message.edit_text(msg)
+    await state.set_state(new_state)
+
+
+# --- Обработчики редактирования каждого поля ---
+@router.message(Registration.waiting_for_edit_first_name)
+async def process_edit_first_name(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    first_name_text = message.text.strip() if message.text else ""
+
+    if not first_name_text:
+        await message.answer("Имя не может быть пустым. Введите имя:")
+        return
+
+    if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', first_name_text):
+        await message.answer(
+            "Имя может содержать только буквы, пробелы и дефисы. Попробуйте снова:"
+        )
+        return
+
+    first_name_cleaned = re.sub(r'\s+', ' ', first_name_text).strip()
+    await db.update_user(user_id, first_name_input=first_name_cleaned)
+
+    await show_profile_review(message, state)
+
+
+@router.message(Registration.waiting_for_edit_last_name)
+async def process_edit_last_name(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    last_name_text = message.text.strip() if message.text else ""
+
+    if not last_name_text:
+        await message.answer("Фамилия не может быть пустой. Введите фамилию:")
+        return
+
+    if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', last_name_text):
+        await message.answer(
+            "Фамилия может содержать только буквы, пробелы и дефисы. Попробуйте снова:"
+        )
+        return
+
+    last_name_cleaned = re.sub(r'\s+', ' ', last_name_text).strip()
+    await db.update_user(user_id, last_name_input=last_name_cleaned)
+
+    await show_profile_review(message, state)
+
+
+@router.callback_query(Registration.waiting_for_edit_gender, lambda c: c.data in ["gender_male", "gender_female"])
+async def process_edit_gender(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    gender = "male" if callback.data == "gender_male" else "female"
+    await db.update_user(user_id, gender=gender)
+
+    await callback.answer("✅ Пол сохранён.")
+    await show_profile_review(callback, state)
+
+
+@router.message(Registration.waiting_for_edit_birth_date)
+async def process_edit_birth_date(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text.strip()
+
+    if not re.fullmatch(r'^\d{2}\.\d{2}\.\d{4}$', text):
+        await message.answer("Неверный формат. Введите дату в формате ДД.ММ.ГГГГ:")
+        return
+
+    try:
+        birth = datetime.strptime(text, "%d.%m.%Y").date()
+    except ValueError:
+        await message.answer("Некорректная дата. Проверьте число, месяц и год:")
+        return
+
+    today = date.today()
+    age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
+    if birth > today:
+        await message.answer("Дата рождения не может быть в будущем. Введите снова:")
+        return
+    if age < 18:
+        await message.answer("К сожалению, программа лояльности доступна только для гостей старше 18 лет.")
+        return
+    if age > 100:
+        await message.answer("Пожалуйста, введите корректную дату рождения.")
+        return
+
+    await db.update_user(user_id, birth_date=birth)
+    await show_profile_review(message, state)
+
+
+@router.message(Registration.waiting_for_edit_email)
+async def process_edit_email(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    email = message.text.strip()
+
+    if not email:
+        await message.answer("Email не может быть пустым. Введите email:")
+        return
+
+    if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+        await message.answer("Неверный формат email. Попробуйте снова:")
+        return
+
+    await db.update_user(user_id, email=email)
+    await show_profile_review(message, state)
 
 
 @router.callback_query(Registration.waiting_for_notifications_consent, lambda c: c.data in ["notify_yes", "notify_no"])
@@ -425,16 +557,50 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
 
     # Получаем обновлённые данные пользователя (для приветствия)
     user = await db.get_user(user_id)
-    preferred_name = user.preferred_name or "Гость"
+    name = user.first_name_input or "Гость"
 
     # Отправляем финальное сообщение с главным меню (пока заглушка)
     await callback.answer(
-        f"🎉 Поздравляем, {preferred_name}! Вы успешно зарегистрированы в программе лояльности.\n\n"
-        f"Главное меню:\n"
-        f"• Мой баланс\n"
-        f"• Специальные предложения\n"
-        f"• Сайты заведений\n"
+        f"🎉 Поздравляем, {name}! Вы успешно зарегистрированы в программе лояльности.\n\n"
+        f"📋 Главное меню:\n"
+        f"• 💰 Мой баланс\n"
+        f"• 🔥 Специальные предложения\n"
+        f"• 🌐 Сайты заведений"
     )
 
     # Очищаем состояние FSM, регистрация завершена
     await state.clear()
+
+
+# Функция показа анкеты
+async def show_profile_review(obj: Union[types.Message, types.CallbackQuery], state: FSMContext):
+    """
+    Показывает пользователю его анкету и предлагает подтвердить или изменить.
+    """
+
+    user_id = obj.from_user.id
+    user = await db.get_user(user_id)
+    if not user:
+        return
+
+    # Формируем текст анкеты
+    gender_text = "мужской" if user.gender == "male" else "женский" if user.gender == "female" else "не указан"
+    birth_text = user.birth_date.strftime('%d.%m.%Y') if user.birth_date else "не указана"
+    text = (
+        "📋 *Проверьте введённые данные:*\n\n"
+        f"👤 *Имя:* {user.first_name_input or 'не указано'}\n"
+        f"👥 *Фамилия:* {user.last_name_input or 'не указано'}\n"
+        f"📞 *Телефон:* {user.phone_number or 'не указан'}\n"
+        f"⚥ *Пол:* {gender_text}\n"
+        f"🎂 *Дата рождения:* {birth_text}\n"
+        f"📧 *Email:* {user.email or 'не указан'}\n\n"
+        "Всё верно?"
+    )
+
+    if isinstance(obj, types.Message):
+        await obj.answer(text, reply_markup=get_review_keyboard(), parse_mode="Markdown")
+    else:
+        await obj.message.edit_text(text, reply_markup=get_review_keyboard(), parse_mode="Markdown")
+        await obj.answer()
+
+    await state.set_state(Registration.waiting_for_review)
