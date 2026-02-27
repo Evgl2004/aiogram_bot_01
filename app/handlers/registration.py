@@ -4,7 +4,7 @@
 
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardRemove
 from loguru import logger
 
 from app.database import db
@@ -19,7 +19,7 @@ from app.states.registration import Registration
 from app.handlers.menu import show_main_menu
 
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Union
 
 router = Router()
@@ -31,8 +31,12 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext)
     user_id = callback.from_user.id
     logger.info(f"Пользователь {user_id} принял согласие с правилами")
 
-    # Обновляем поле rules_accepted через метод update_user
-    await db.update_user(user_id, rules_accepted=True)
+    # Обновляем поле rules_accepted и rules_accepted_at через метод update_user
+    await db.update_user(
+        user_id,
+        rules_accepted=True,
+        rules_accepted_at=datetime.now(timezone.utc)
+    )
 
     await callback.answer("Спасибо! Правила приняты.")
     await callback.message.edit_reply_markup(reply_markup=None)
@@ -138,7 +142,7 @@ async def process_first_name(message: types.Message, state: FSMContext) -> None:
 
     # --- Валидация допустимых символов ---
     # Разрешены: буквы (латиница и кириллица, включая 'ё'), пробелы, дефис.
-    # Знак ^ означает начало строки, $ — конец, [ ... ]+ — один или более допустимых символов.
+    # Знак ^ означает начало строки, $ — конец, [...]+ — один или более допустимых символов.
     if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', first_name_text):
         await message.answer(
             "⚠️ Имя может содержать только буквы (латиница и кириллица), пробелы и дефисы.\n"
@@ -147,7 +151,7 @@ async def process_first_name(message: types.Message, state: FSMContext) -> None:
         return  # остаёмся в том же состоянии
 
     # --- Дополнительная очистка: заменяем множественные пробелы на один ---
-    # Например, "Иван   Петров" -> "Иван Петров"
+    # Например, "Иван Петров" -> "Иван Петров"
     first_name_cleaned = re.sub(r'\s+', ' ', first_name_text).strip()
 
     # Сохраняем полное имя в базу (пока без preferred_name)
@@ -189,7 +193,7 @@ async def process_last_name(message: types.Message, state: FSMContext) -> None:
 
     # --- Валидация допустимых символов ---
     # Разрешены: буквы (латиница и кириллица, включая 'ё'), пробелы, дефис.
-    # Знак ^ означает начало строки, $ — конец, [ ... ]+ — один или более допустимых символов.
+    # Знак ^ означает начало строки, $ — конец, [...]+ — один или более допустимых символов.
     if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', last_name_text):
         await message.answer(
             "⚠️ Фамилия может содержать только буквы (латиница и кириллица), пробелы и дефисы.\n"
@@ -543,10 +547,11 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
 
     logger.info(f"Пользователь user_id={user_id} {choice_text}")
 
-    # Обновляем запись: согласие на уведомления и флаг завершения регистрации
+    # Обновляем запись: согласие на уведомления и дату, а также признак завершения регистрации
     await db.update_user(
         user_id,
         notifications_allowed=notifications_allowed,
+        notifications_allowed_at=datetime.now(timezone.utc),
         is_registered=True
     )
 

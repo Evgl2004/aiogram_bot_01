@@ -13,6 +13,7 @@ from app.keyboards.registration import get_rules_keyboard, get_contact_keyboard
 from app.states.registration import Registration
 
 from app.handlers.menu import show_main_menu
+from app.handlers.legacy import start_legacy_upgrade
 
 router = Router()
 
@@ -43,6 +44,12 @@ async def start_command(message: Message, state: FSMContext):
     if not db_user:
         # Если пользователь не найден (маловероятно), создадим его ещё раз
         logger.error(f"Пользователь user_id={user_id} не найден после добавления пользователя")
+        return
+
+    # --- Проверка, является ли пользователь устаревшим ---
+    if db_user.is_registered and db_user.is_legacy:
+        logger.info(f"Устаревший пользователь user_id={user_id} запустил бот, запускаем процесс обновления данных")
+        await start_legacy_upgrade(message, state, db_user)
         return
 
     # --- Проверка согласия с правилами ---
@@ -76,5 +83,3 @@ async def start_command(message: Message, state: FSMContext):
         user_name=db_user.first_name_input or "Гость"
     )
     return
-
-

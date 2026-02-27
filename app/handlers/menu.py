@@ -6,7 +6,6 @@ from app.utils.qr import generate_qr_code
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram import Bot
-from loguru import logger
 
 from app.database import db
 from app.keyboards.menu import (
@@ -34,19 +33,18 @@ async def show_main_menu(chat_id: int, bot: Bot, state: FSMContext, user_name: s
         f"Вы в главном меню.\n"
         "Выберите раздел:"
     )
-    # Используем bot.send_message, так как функция может быть вызвана не из хендлера
+    # Используем bot.send_message, так как функция может быть вызвана не из Обработчика
     await bot.send_message(chat_id, text, reply_markup=get_main_menu_keyboard())
 
 
 # ---------- Обработчики пунктов главного меню ----------
 @router.callback_query(lambda c: c.data == "balance")
-async def process_balance(callback: types.CallbackQuery, state: FSMContext):
+async def process_balance(callback: types.CallbackQuery):
     """
     Показывает информацию о балансе (заглушка).
     """
 
     await callback.answer()
-    user = await db.get_user(callback.from_user.id)
     # Заглушка, позже данные будут подтягиваться из API
     text = (
         "💰 *Твой баланс*\n\n"
@@ -55,7 +53,6 @@ async def process_balance(callback: types.CallbackQuery, state: FSMContext):
         "Ближайшая дата сгорания: —\n"
         "Количество бонусов к сгоранию: —\n"
         "Количество посещений до нового уровня: 3\n"
-        "Посещение бани: 0"
     )
     await callback.message.edit_text(
         text,
@@ -65,7 +62,7 @@ async def process_balance(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "virtual_card")
-async def process_virtual_card(callback: types.CallbackQuery, state: FSMContext):
+async def process_virtual_card(callback: types.CallbackQuery):
     """
     Генерирует и отправляет QR-код с номером телефона пользователя.
     """
@@ -88,9 +85,9 @@ async def process_virtual_card(callback: types.CallbackQuery, state: FSMContext)
 
 
 @router.callback_query(lambda c: c.data == "support")
-async def process_support(callback: types.CallbackQuery, state: FSMContext):
+async def process_support(callback: types.CallbackQuery):
     """
-    Показывает подменю отдела заботы.
+    Показывает вложенное меню отдела заботы.
     """
 
     await callback.answer()
@@ -102,7 +99,7 @@ async def process_support(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "vacancies")
-async def process_vacancies(callback: types.CallbackQuery, state: FSMContext):
+async def process_vacancies(callback: types.CallbackQuery):
     """
     Показывает информацию о вакансиях и ссылку.
     """
@@ -131,7 +128,7 @@ async def process_vacancies(callback: types.CallbackQuery, state: FSMContext):
 
 # ---------- Обработчики подменю отдела заботы ----------
 @router.callback_query(lambda c: c.data == "support_feedback")
-async def process_feedback(callback: types.CallbackQuery, state: FSMContext):
+async def process_feedback(callback: types.CallbackQuery):
     """
     Отправляет ссылку на внешний сервис отзывов.
     """
@@ -151,7 +148,7 @@ async def process_feedback(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "support_question")
-async def process_question(callback: types.CallbackQuery, state: FSMContext):
+async def process_question(callback: types.CallbackQuery):
     """
     Заглушка для функции 'Мне только спросить'.
     """
@@ -170,17 +167,17 @@ async def process_question(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "support_contacts")
-async def process_contacts(callback: types.CallbackQuery, state: FSMContext):
+async def process_contacts(callback: types.CallbackQuery):
     """
     Показывает контактную информацию.
     """
 
     await callback.answer()
     text = (
-        "📧 Контакты\n\n"
-        "Почта для связи: brand@ermolaev.beer\n"
-        "Сайт: https://ermolaev.beer\n"
-        "Соцсети: @ermolaev_beer"
+        "📧 Контакты:\n\n"
+        "Почта для связи: info@sobolev.rest\n"
+        "Сайт: https://sobolevalliance.su\n"
+        "Соцсети: @sobolevalliance"
     )
     await callback.message.edit_text(
         text,
@@ -190,7 +187,7 @@ async def process_contacts(callback: types.CallbackQuery, state: FSMContext):
 
 # ---------- Навигационные кнопки ----------
 @router.callback_query(lambda c: c.data == "back_to_main")
-async def process_back_to_main(callback: types.CallbackQuery, state: FSMContext):
+async def process_back_to_main(callback: types.CallbackQuery):
     """
     Возврат в главное меню.
     """
@@ -206,9 +203,9 @@ async def process_back_to_main(callback: types.CallbackQuery, state: FSMContext)
 
 
 @router.callback_query(lambda c: c.data == "back_to_support")
-async def process_back_to_support(callback: types.CallbackQuery, state: FSMContext):
+async def process_back_to_support(callback: types.CallbackQuery):
     """
-    Возврат в подменю отдела заботы.
+    Возврат во вложенный отдел заботы.
     """
 
     await callback.answer()
