@@ -85,11 +85,35 @@ class User(Base):
     rules_accepted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     """
+    Дата и время принятия пользователем правил и согласия на обработку персональных данных.
+    Заполняется только при успешном нажатии кнопки «Согласен».
+    """
+    rules_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    """
     Отдельное согласие на получение информационных и рекламных уведомлений.
     Требуется по закону о рекламе и персональных данных.
     True — согласен получать уведомления, False — не согласен.
     """
     notifications_allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    """
+    Дата и время принятия или отклонения согласия на получение уведомлений.
+    Заполняется при выборе notify_yes или notify_no.
+    """
+    notifications_allowed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    """
+    Признак, что пользователь был перенесён из старого бота (legacy).
+    True – требуется пройти процесс апгрейда (актуализация данных и согласия).
+    False – обычный пользователь, созданный в текущей версии бота.
+    По умолчанию False.
+    """
+    is_legacy: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     """
     Признак завершения полной регистрации.

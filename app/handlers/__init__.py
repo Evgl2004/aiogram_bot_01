@@ -16,6 +16,8 @@ from .admin import combined_router as admin_router
 from .registration import router as registration_router
 # Обработчик главного меню и подменю
 from .menu import router as menu_router
+# Маршрутизатор для обновления устаревших пользователей.
+from .legacy import router as legacy_router
 
 
 def setup_routers(dp: Dispatcher) -> None:
@@ -39,5 +41,8 @@ def setup_routers(dp: Dispatcher) -> None:
     # Подключаем роутер регистрации (обработчики согласий, контакта, анкеты)
     dp.include_router(registration_router)
 
-    # одключаем роутер главного меню и подменю
+    # Подключаем роутер главного меню и подменю
     dp.include_router(menu_router)
+
+    # Подключаем роутер для обновления устаревших пользователей.
+    dp.include_router(legacy_router)

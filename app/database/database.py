@@ -1,10 +1,10 @@
 """
 Класс для работы с базой данных
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func
 from loguru import logger
 
 from app.config import settings
@@ -35,7 +35,7 @@ class Database:
         self.migration_manager = MigrationManager(self.engine)
     
     async def run_migrations(self):
-        """Запуск всех неприменённых миграций"""
+        """Запуск всех не применённых миграций"""
         try:
             await self.migration_manager.run_migrations()
             logger.info("✅ Database migrations completed successfully")
@@ -53,9 +53,14 @@ class Database:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("✅ Database tables created successfully")
     
-    async def add_user(self, user_id: int, username: Optional[str] = None,
-                      first_name: Optional[str] = None, last_name: Optional[str] = None) -> User:
+    async def add_user(self,
+                       user_id: int,
+                       username: Optional[str] = None,
+                       first_name: Optional[str] = None,
+                       last_name: Optional[str] = None
+                       ) -> User:
         """Добавление нового пользователя"""
+
         async with self.session_maker() as session:
             # Проверяем, существует ли пользователь
             existing_user = await session.get(User, user_id)
@@ -65,7 +70,7 @@ class Database:
                 existing_user.first_name = first_name
                 existing_user.last_name = last_name
                 existing_user.is_active = True
-                existing_user.updated_at = datetime.utcnow()
+                existing_user.updated_at = datetime.now(timezone.utc)
                 await session.commit()
                 return existing_user
             
@@ -95,7 +100,7 @@ class Database:
     async def get_active_users(self) -> List[User]:
         """Получение активных пользователей"""
         async with self.session_maker() as session:
-            result = await session.execute(select(User).where(User.is_active == True))
+            result = await session.execute(select(User).where(User.is_active))
             return result.scalars().all()
     
     async def get_users_count(self) -> int:
@@ -107,7 +112,7 @@ class Database:
     async def get_active_users_count(self) -> int:
         """Получение количества активных пользователей"""
         async with self.session_maker() as session:
-            result = await session.execute(select(func.count(User.id)).where(User.is_active == True))
+            result = await session.execute(select(func.count(User.id)).where(User.is_active))
             return result.scalar() or 0
     
     async def update_bot_stats(self) -> BotStats:
@@ -124,13 +129,13 @@ class Database:
                 # Обновляем существующую запись
                 stats.total_users = total_users
                 stats.active_users = active_users
-                stats.last_restart = datetime.utcnow()
+                stats.last_restart = datetime.now(timezone.utc)
             else:
                 # Создаем новую запись
                 stats = BotStats(
                     total_users=total_users,
                     active_users=active_users,
-                    last_restart=datetime.utcnow()
+                    last_restart=datetime.now(timezone.utc)
                 )
                 session.add(stats)
             
@@ -158,6 +163,7 @@ class Database:
         Принимает ID пользователя и именованные аргументы — названия полей и новые значения.
         Возвращает обновлённого пользователя или None, если пользователь не найден.
         """
+
         async with self.session_maker() as session:
             user = await session.get(User, user_id)
             if not user:
@@ -171,7 +177,7 @@ class Database:
                 else:
                     logger.warning(f"Попытка обновить несуществующее поле {key} для Пользователя user_id={user_id}")
 
-            user.updated_at = datetime.utcnow()  # обновляем timestamp
+            user.updated_at = datetime.now(timezone.utc)  # обновляем timestamp
             await session.commit()
             await session.refresh(user)
             return user
