@@ -23,11 +23,18 @@ from app.keyboards.registration import (
     get_rules_keyboard,
     get_gender_keyboard,
     get_notifications_keyboard,
-    get_review_keyboard,
     get_edit_choice_keyboard,
 )
 from app.states.legacy import LegacyUpgrade
 from app.handlers.menu import show_main_menu
+from app.utils.validation import (
+    validate_first_name,
+    validate_last_name,
+    validate_birth_date,
+    validate_email,
+    clean_name
+)
+from app.utils.profile import show_profile_review as show_profile_review_util
 
 router = Router()
 
@@ -77,7 +84,7 @@ async def ask_next_field(user_id: int,
     """
 
     if not missing_fields:
-        await show_profile_review(obj, state)
+        await show_profile_review_util(obj, state, LegacyUpgrade.waiting_for_review)
         return
 
     # Сохраняем оставшиеся поля в данных состояния
@@ -122,6 +129,11 @@ async def start_legacy_upgrade(obj: Union[types.Message, types.CallbackQuery], s
     """
     Запускает процесс обновления для устаревшего-пользователя.
     Вызывается из start.py, когда обнаружен пользователь с is_legacy=True.
+
+    Args:
+        obj (Union[types.Message, types.CallbackQuery]): Объект сообщения или callback-запроса
+        state (FSMContext): Контекст состояния
+        user: Объект пользователя
     """
 
     logger.info(f"Запуск обновления для устаревшего пользователя user_id={user.id} (is_legacy={user.is_legacy})")
@@ -154,6 +166,10 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext)
     Обработчик нажатия кнопки «Согласен» на правилах.
     Сохраняет факт принятия правил с текущей датой, затем проверяет наличие недостающих полей.
     Если поля есть – запускает их сбор, иначе сразу показывает анкету.
+
+    Args:
+        callback (types.CallbackQuery): Callback-запрос
+        state (FSMContext): Контекст состояния
     """
 
     user_id = callback.from_user.id
@@ -176,7 +192,7 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext)
         await ask_next_field(user_id, missing, callback, state)
     else:
         # Если все поля уже заполнены, сразу показываем анкету
-        await show_profile_review(callback, state)
+        await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
 
 
 # ---------- Обработка ввода полей ----------
@@ -187,73 +203,57 @@ async def process_field_input(message: types.Message, state: FSMContext):
     Проверяет, какое поле сейчас ожидается (первое в списке missing_fields),
     проверяет введённое значение и сохраняет его. После сохранения убирает это поле из списка
     и переходит к следующему (ask_next_field).
+
+    Args:
+        message (types.Message): Сообщение от пользователя
+        state (FSMContext): Контекст состояния
     """
 
     user_id = message.from_user.id
     data = await state.get_data()
     missing_fields = data.get('missing_fields', [])
     if not missing_fields:
-        await show_profile_review(message, state)
+        await show_profile_review_util(message, state, LegacyUpgrade.waiting_for_review)
         return
 
     field = missing_fields[0]
     value = message.text.strip()
 
-    # Валидация и сохранение
+    # Валидация и сохранение с использованием общих функций
     if field == 'first_name':
-        if not value:
-            await message.answer("❌ Имя не может быть пустым. Введите имя:")
+        is_valid, error_message = await validate_first_name(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
-        if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', value):
-            await message.answer("⚠️ Имя может содержать только буквы, пробелы и дефисы. Попробуйте снова:")
-            return
-        cleaned = re.sub(r'\s+', ' ', value).strip()
+        cleaned = await clean_name(value)
         await db.update_user(user_id, first_name_input=cleaned)
         missing_fields.pop(0)
         await ask_next_field(user_id, missing_fields, message, state)
 
     elif field == 'last_name':
-        if not value:
-            await message.answer("❌ Фамилия не может быть пустой. Введите фамилию:")
+        is_valid, error_message = await validate_last_name(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
-        if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', value):
-            await message.answer("⚠️ Фамилия может содержать только буквы, пробелы и дефисы. Попробуйте снова:")
-            return
-        cleaned = re.sub(r'\s+', ' ', value).strip()
+        cleaned = await clean_name(value)
         await db.update_user(user_id, last_name_input=cleaned)
         missing_fields.pop(0)
         await ask_next_field(user_id, missing_fields, message, state)
 
     elif field == 'birth_date':
-        if not re.fullmatch(r'^\d{2}\.\d{2}\.\d{4}$', value):
-            await message.answer("❌ Неверный формат. Введите дату в формате ДД.ММ.ГГГГ:")
+        is_valid, error_message = await validate_birth_date(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
-        try:
-            birth = datetime.strptime(value, "%d.%m.%Y").date()
-        except ValueError:
-            await message.answer("⚠️ Некорректная дата. Проверьте число, месяц и год:")
-            return
-        today = datetime.now().date()
-        age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
-        if birth > today:
-            await message.answer("⚠️ Дата рождения не может быть в будущем.")
-            return
-        if age < 18:
-            await message.answer("⛔ К сожалению, программа лояльности доступна только для гостей старше 18 лет.")
-            return
-        if age > 100:
-            await message.answer("⛔ Пожалуйста, введите корректную дату рождения.")
-            return
+        birth = datetime.strptime(value, "%d.%m.%Y").date()
         await db.update_user(user_id, birth_date=birth)
         missing_fields.pop(0)
         await ask_next_field(user_id, missing_fields, message, state)
 
     elif field == 'email':
-        if not value:
-            await message.answer("❌ Email не может быть пустым. Введите email:")
-            return
-        if not re.match(r'^[^@]+@[^@]+\.[^@]+$', value):
-            await message.answer("⚠️ Неверный формат email. Попробуйте снова:")
+        is_valid, error_message = await validate_email(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
         await db.update_user(user_id, email=value)
         missing_fields.pop(0)
@@ -271,13 +271,17 @@ async def process_gender_input(callback: types.CallbackQuery, state: FSMContext)
     """
     Обрабатывает нажатие на кнопки выбора пола (мужской/женский) в состоянии ожидания поля.
     Сохраняет выбранный пол, убирает поле 'gender' из списка missing_fields и переходит к следующему.
+
+    Args:
+        callback (types.CallbackQuery): Callback-запрос
+        state (FSMContext): Контекст состояния
     """
 
     user_id = callback.from_user.id
     data = await state.get_data()
     missing_fields = data.get('missing_fields', [])
     if not missing_fields or missing_fields[0] != 'gender':
-        await show_profile_review(callback, state)
+        await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
         return
 
     gender = "male" if callback.data == "gender_male" else "female"
@@ -288,45 +292,15 @@ async def process_gender_input(callback: types.CallbackQuery, state: FSMContext)
     await ask_next_field(user_id, missing_fields, callback, state)
 
 
-# ---------- Показ анкеты (повторно используем из registration.py, но адаптируем) ----------
-async def show_profile_review(obj: Union[types.Message, types.CallbackQuery], state: FSMContext):
-    """
-    Показывает пользователю его текущие данные в виде анкеты с кнопками «Всё верно» / «Изменить».
-    Используется как после сбора всех полей, так и после редактирования.
-    """
-
-    user_id = obj.from_user.id
-    user = await db.get_user(user_id)
-    if not user:
-        return
-
-    gender_text = "мужской" if user.gender == "male" else "женский" if user.gender == "female" else "не указан"
-    birth_text = user.birth_date.strftime('%d.%m.%Y') if user.birth_date else "не указана"
-    text = (
-        "📋 *Проверьте введённые данные:*\n\n"
-        f"👤 *Имя:* {user.first_name_input or 'не указано'}\n"
-        f"👥 *Фамилия:* {user.last_name_input or 'не указано'}\n"
-        f"📞 *Телефон:* {user.phone_number or 'не указан'}\n"
-        f"⚥ *Пол:* {gender_text}\n"
-        f"🎂 *Дата рождения:* {birth_text}\n"
-        f"📧 *Email:* {user.email or 'не указан'}\n\n"
-        "Всё верно?"
-    )
-
-    if isinstance(obj, types.Message):
-        await obj.answer(text, reply_markup=get_review_keyboard(), parse_mode="Markdown")
-    else:
-        await obj.message.edit_text(text, reply_markup=get_review_keyboard(), parse_mode="Markdown")
-        await obj.answer()
-
-    await state.set_state(LegacyUpgrade.waiting_for_review)
-
-
 # ---------- Подтверждение анкеты ----------
 @router.callback_query(LegacyUpgrade.waiting_for_review, lambda c: c.data == "review_correct")
 async def process_review_correct(callback: types.CallbackQuery, state: FSMContext):
     """
     Пользователь подтвердил, что данные верны. Переходим к согласию на уведомления.
+
+    Args:
+        callback (types.CallbackQuery): Callback-запрос
+        state (FSMContext): Контекст состояния
     """
 
     await callback.answer()
@@ -343,6 +317,10 @@ async def process_review_correct(callback: types.CallbackQuery, state: FSMContex
 async def process_review_edit(callback: types.CallbackQuery, state: FSMContext):
     """
     Пользователь хочет что-то изменить. Показываем меню выбора поля для редактирования.
+
+    Args:
+        callback (types.CallbackQuery): Callback-запрос
+        state (FSMContext): Контекст состояния
     """
 
     await callback.answer()
@@ -360,13 +338,17 @@ async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
     Обрабатывает выбор пользователя в меню редактирования.
     Сохраняет выбранное поле в state и переводит в состояние ожидания ввода нового значения.
     Для поля 'пол' сразу показывает клавиатуру выбора.
+
+    Args:
+        callback (types.CallbackQuery): Callback-запрос
+        state (FSMContext): Контекст состояния
     """
 
     data = callback.data
     await callback.answer()
 
     if data == "edit_cancel":
-        await show_profile_review(callback, state)
+        await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
         return
 
     # Сохраняем выбранное поле в state
@@ -392,7 +374,7 @@ async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
         msg = "📧 Введите новый email:"
         next_state = LegacyUpgrade.waiting_for_edit_field
     else:
-        await show_profile_review(callback, state)
+        await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
         return
 
     await callback.message.edit_text(msg)
@@ -404,6 +386,10 @@ async def process_edit_field(message: types.Message, state: FSMContext):
     """
     Обрабатывает текстовый ввод нового значения для редактируемого поля.
     Проверят, сохраняет и возвращается к показу анкеты.
+
+    Args:
+        message (types.Message): Сообщение от пользователя
+        state (FSMContext): Контекст состояния
     """
 
     user_id = message.from_user.id
@@ -411,65 +397,45 @@ async def process_edit_field(message: types.Message, state: FSMContext):
     field = data.get('edit_field')
     value = message.text.strip()
 
-    # Валидация и сохранение (аналогично регистрации)
+    # Валидация и сохранение с использованием общих функций
     if field == 'edit_first_name':
-        if not value:
-            await message.answer("Имя не может быть пустым. Введите имя:")
+        is_valid, error_message = await validate_first_name(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
-        if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', value):
-            await message.answer("Имя может содержать только буквы, пробелы и дефисы. Попробуйте снова:")
-            return
-        cleaned = re.sub(r'\s+', ' ', value).strip()
+        cleaned = await clean_name(value)
         await db.update_user(user_id, first_name_input=cleaned)
 
     elif field == 'edit_last_name':
-        if not value:
-            await message.answer("Фамилия не может быть пустой. Введите фамилию:")
+        is_valid, error_message = await validate_last_name(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
-        if not re.fullmatch(r'^[a-zA-Zа-яА-ЯёЁ\s-]+$', value):
-            await message.answer("Фамилия может содержать только буквы, пробелы и дефисы. Попробуйте снова:")
-            return
-        cleaned = re.sub(r'\s+', ' ', value).strip()
+        cleaned = await clean_name(value)
         await db.update_user(user_id, last_name_input=cleaned)
 
     elif field == 'edit_birth_date':
-        if not re.fullmatch(r'^\d{2}\.\d{2}\.\d{4}$', value):
-            await message.answer("Неверный формат. Введите дату в формате ДД.ММ.ГГГГ:")
+        is_valid, error_message = await validate_birth_date(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
-        try:
-            birth = datetime.strptime(value, "%d.%m.%Y").date()
-        except ValueError:
-            await message.answer("Некорректная дата. Проверьте число, месяц и год:")
-            return
-        today = datetime.now().date()
-        age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
-        if birth > today:
-            await message.answer("Дата рождения не может быть в будущем.")
-            return
-        if age < 18:
-            await message.answer("К сожалению, программа лояльности доступна только для гостей старше 18 лет.")
-            return
-        if age > 100:
-            await message.answer("Пожалуйста, введите корректную дату рождения.")
-            return
+        birth = datetime.strptime(value, "%d.%m.%Y").date()
         await db.update_user(user_id, birth_date=birth)
 
     elif field == 'edit_email':
-        if not value:
-            await message.answer("Email не может быть пустым. Введите email:")
-            return
-        if not re.match(r'^[^@]+@[^@]+\.[^@]+$', value):
-            await message.answer("Неверный формат email. Попробуйте снова:")
+        is_valid, error_message = await validate_email(value)
+        if not is_valid:
+            await message.answer(error_message)
             return
         await db.update_user(user_id, email=value)
 
     else:
         # Если неизвестное поле – просто показываем анкету
-        await show_profile_review(message, state)
+        await show_profile_review_util(message, state, LegacyUpgrade.waiting_for_review)
         return
 
     # После успешного сохранения показываем обновлённую анкету
-    await show_profile_review(message, state)
+    await show_profile_review_util(message, state, LegacyUpgrade.waiting_for_review)
 
 
 @router.callback_query(LegacyUpgrade.waiting_for_edit_field, lambda c: c.data in ["gender_male", "gender_female"])
@@ -477,6 +443,10 @@ async def process_edit_gender(callback: types.CallbackQuery, state: FSMContext):
     """
     Обрабатывает выбор нового пола при редактировании.
     Сохраняет новое значение и возвращается к анкете.
+
+    Args:
+        callback (types.CallbackQuery): Callback-запрос
+        state (FSMContext): Контекст состояния
     """
 
     user_id = callback.from_user.id
@@ -484,7 +454,7 @@ async def process_edit_gender(callback: types.CallbackQuery, state: FSMContext):
     await db.update_user(user_id, gender=gender)
 
     await callback.answer("✅ Пол сохранён.")
-    await show_profile_review(callback, state)
+    await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
 
 
 # ---------- Согласие на уведомления ----------
@@ -494,6 +464,10 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     Обрабатывает выбор пользователя по согласию на уведомления.
     Сохраняет выбор с датой, снимает признак is_legacy, выводит финальное сообщение
     и показывает главное меню.
+
+    Args:
+        callback (types.CallbackQuery): Callback-запрос
+        state (FSMContext): Контекст состояния
     """
 
     user_id = callback.from_user.id
