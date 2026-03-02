@@ -235,3 +235,74 @@ class MigrationHistory(Base):
     
     def __repr__(self) -> str:
         return f"<MigrationHistory(version={self.version}, name={self.name})>"
+
+
+class Ticket(Base):
+    """
+    Модель тикета для системы модерации
+
+    Хранит вопросы от гостей, которые направляются модератору.
+    """
+
+    __tablename__ = "tickets"
+
+    """Внутренний идентификатор тикета."""
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    """Telegram ID пользователя, создавшего тикет."""
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    """Username пользователя (если есть)."""
+    user_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    """Имя пользователя."""
+    user_first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    """Текст вопроса от пользователя."""
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+
+    """Статус тикета (open, in_progress)."""
+    status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)
+
+    """Дата и время создания тикета."""
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    """Дата и время первого ответа модератора."""
+    first_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    """Дата и время последнего обновления тикета."""
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return f"<Ticket(id={self.id}, user_id={self.user_id}, status={self.status})>"
+
+
+class TicketMessage(Base):
+    """
+    Модель сообщения в тикете
+
+    Хранит историю переписки по тикету между пользователем и модератором.
+    """
+
+    __tablename__ = "ticket_messages"
+
+    """Внутренний идентификатор сообщения."""
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    """ID тикета, к которому относится сообщение."""
+    ticket_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    """Тип отправителя (user или moderator)."""
+    sender_type: Mapped[str] = mapped_column(String(10), nullable=False)
+
+    """ID отправителя."""
+    sender_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    """Текст сообщения."""
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+
+    """Дата и время создания сообщения."""
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<TicketMessage(id={self.id}, ticket_id={self.ticket_id}, sender_type={self.sender_type})>"
