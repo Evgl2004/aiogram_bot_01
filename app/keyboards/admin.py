@@ -19,6 +19,11 @@ class AdminKeyboards:
         ))
 
         builder.add(InlineKeyboardButton(
+            text="👨‍💼 Модератор",
+            callback_data="mod_main"
+        ))
+
+        builder.add(InlineKeyboardButton(
             text="⚙️ Настройки API",
             callback_data="admin_api_settings"
         ))

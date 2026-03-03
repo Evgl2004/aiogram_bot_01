@@ -62,6 +62,10 @@ class AddAllMissingUserFieldsAndTicketsMigration(Migration):
             ALTER TABLE users
             ADD COLUMN IF NOT EXISTS is_registered BOOLEAN NOT NULL DEFAULT FALSE
         """))
+        await connection.execute(text("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS is_moderator BOOLEAN NOT NULL DEFAULT FALSE
+        """))
 
         # Личные данные
         await connection.execute(text("""
@@ -177,7 +181,7 @@ class AddAllMissingUserFieldsAndTicketsMigration(Migration):
         logger.info("Dropping user fields...")
         fields_to_drop = [
             'rules_accepted', 'rules_accepted_at', 'notifications_allowed',
-            'notifications_allowed_at', 'is_legacy', 'is_registered',
+            'notifications_allowed_at', 'is_legacy', 'is_registered', 'is_moderator'
             'phone_number', 'first_name_input', 'last_name_input',
             'gender', 'birth_date', 'email'
         ]
