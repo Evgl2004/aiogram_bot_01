@@ -13,6 +13,8 @@ from .help import router as help_router
 from .registration import router as registration_router
 from .menu import router as menu_router
 from .legacy import router as legacy_router
+from .admin import combined_router as admin_router
+from .moderation import router as moderation_router
 
 
 def setup_routers(dp: Dispatcher) -> None:
@@ -28,3 +30,5 @@ def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(registration_router)      # Роутер регистрации
     dp.include_router(menu_router)              # Роутер главного меню
     dp.include_router(legacy_router)            # Роутер апгрейда устаревших пользователей
+    dp.include_router(admin_router)             # Роутер команд администратора
+    dp.include_router(moderation_router)        # Роутер модерации
