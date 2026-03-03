@@ -6,14 +6,17 @@ from app.utils.qr import generate_qr_code
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram import Bot
+from loguru import logger
 
 from app.database import db
+from app.services.tickets import ticket_service
 from app.keyboards.menu import (
     get_main_menu_keyboard,
     get_support_submenu_keyboard,
     get_back_to_main_keyboard,
     get_back_to_support_keyboard,
 )
+from app.states.tickets import TicketStates
 
 router = Router()
 
@@ -69,6 +72,10 @@ async def process_virtual_card(callback: types.CallbackQuery):
 
     await callback.answer()
     user = await db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
     phone = user.phone_number or "+70000000000"  # Заглушка, если номера нет
 
     # Генерируем QR-код
@@ -148,22 +155,90 @@ async def process_feedback(callback: types.CallbackQuery):
 
 
 @router.callback_query(lambda c: c.data == "support_question")
-async def process_question(callback: types.CallbackQuery):
+async def process_question(callback: types.CallbackQuery, state: FSMContext):
     """
-    Заглушка для функции 'Мне только спросить'.
+    Обработчик функции 'Мне только спросить' - создание тикета.
     """
 
     await callback.answer()
+
+    # Сохраняем состояние для ожидания вопроса
+    await state.set_state(TicketStates.waiting_for_question)
+
     text = (
         "❓ *Мне только спросить*\n\n"
-        "Эта функция находится в разработке. Скоро вы сможете задать вопрос "
-        "оператору прямо в Telegram."
+        "Пожалуйста, отправьте ваш вопрос, и наш модератор свяжется с вами в ближайшее время.\n\n"
+        "Введите ваш вопрос:"
     )
     await callback.message.edit_text(
         text,
         parse_mode="Markdown",
         reply_markup=get_back_to_support_keyboard()
     )
+
+
+@router.message(TicketStates.waiting_for_question)
+async def process_question_text(message: types.Message, state: FSMContext):
+    """
+    Обработчик текста вопроса от пользователя.
+    """
+    # Получаем информацию о пользователе
+    user = await db.get_user(message.from_user.id)
+    if not user:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return
+
+    # Создаем тикет
+    ticket = await ticket_service.create_ticket(
+        user_id=message.from_user.id,
+        message=message.text,
+        user_username=message.from_user.username,
+        user_first_name=message.from_user.first_name or user.first_name_input
+    )
+
+    # Отправляем подтверждение пользователю
+    await message.answer(
+        f"📨 Ваш вопрос принят!\n\n"
+        f"🎫 Создан тикет #{ticket.id}\n"
+        f"🕐 Модератор рассмотрит ваш вопрос в ближайшее время.\n\n"
+        f"Вы получите уведомление с ответом."
+    )
+
+    # Уведомляем модераторов о новом тикете
+    try:
+        # Получаем статистику по тикетам
+        open_count, in_progress_count, avg_response_time = await ticket_service.get_tickets_stats()
+
+        # Формируем текст уведомления
+        notification_text = (
+            f"📬 Новый тикет от пользователя!\n\n"
+            f"🎫 Тикет #{ticket.id}\n"
+            f"👤 Пользователь: {message.from_user.username or message.from_user.first_name}\n"
+            f"❓ Вопрос: {message.text[:100]}{'...' if len(message.text) > 100 else ''}\n\n"
+            f"📊 Статистика:\n"
+            f"📬 Новые тикеты: {open_count}\n"
+            f"🔄 В работе: {in_progress_count}\n"
+        )
+
+        # Отправляем уведомление всем модераторам
+        # Используем готовый метод из db для получения модераторов
+        moderators = await db.get_moderators()
+
+        for moderator in moderators:
+            try:
+                await message.bot.send_message(
+                    chat_id=moderator.id,
+                    text=notification_text
+                )
+            except Exception as e:
+                logger.error(f"Ошибка при отправке уведомления модератору {moderator.id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Ошибка при отправке уведомления модераторам: {e}")
+
+    # Очищаем состояние
+    await state.clear()
 
 
 @router.callback_query(lambda c: c.data == "support_contacts")
@@ -187,13 +262,20 @@ async def process_contacts(callback: types.CallbackQuery):
 
 # ---------- Навигационные кнопки ----------
 @router.callback_query(lambda c: c.data == "back_to_main")
-async def process_back_to_main(callback: types.CallbackQuery):
+async def process_back_to_main(callback: types.CallbackQuery, state: FSMContext):
     """
     Возврат в главное меню.
     """
 
     await callback.answer()
+    # Очищаем состояние при возврате в главное меню
+    await state.clear()
+
     user = await db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
     name = user.first_name_input or "Гость"
     text = f"👋 {name}, вы в главном меню.\nВыберите раздел:"
     # Отправляем новое сообщение с главным меню
@@ -203,12 +285,15 @@ async def process_back_to_main(callback: types.CallbackQuery):
 
 
 @router.callback_query(lambda c: c.data == "back_to_support")
-async def process_back_to_support(callback: types.CallbackQuery):
+async def process_back_to_support(callback: types.CallbackQuery, state: FSMContext):
     """
     Возврат во вложенный отдел заботы.
     """
 
     await callback.answer()
+    # Очищаем состояние при возврате в отдел заботы
+    await state.clear()
+
     await callback.message.edit_text(
         "🆘 *Отдел заботы*\n\nВыберите действие:",
         parse_mode="Markdown",

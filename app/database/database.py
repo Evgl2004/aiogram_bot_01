@@ -103,6 +103,46 @@ class Database:
             result = await session.execute(select(User).where(User.is_active))
             return result.scalars().all()
     
+    async def get_moderators(self) -> List[User]:
+        """Получение всех модераторов"""
+        async with self.session_maker() as session:
+            result = await session.execute(
+                select(User).where(User.is_moderator == True)
+            )
+            return result.scalars().all()
+
+    async def get_moderator_ids(self) -> List[int]:
+        """Получение ID всех модераторов"""
+        async with self.session_maker() as session:
+            result = await session.execute(
+                select(User.id).where(User.is_moderator == True)
+            )
+            return [row[0] for row in result.fetchall()]
+
+    async def set_user_as_moderator(self, user_id: int, is_moderator: bool = True) -> Optional[User]:
+        """Установка/снятие прав модератора у пользователя"""
+        async with self.session_maker() as session:
+            user = await session.get(User, user_id)
+            if not user:
+                logger.warning(f"Пользователь user_id={user_id} не найден")
+                return None
+
+            user.is_moderator = is_moderator
+            user.updated_at = datetime.now(timezone.utc)
+            await session.commit()
+            await session.refresh(user)
+
+            logger.info(f"Пользователь {user_id} установлен как модератор: {is_moderator}")
+            return user
+
+    async def is_user_moderator(self, user_id: int) -> bool:
+        """Проверка, является ли пользователь модератором"""
+        async with self.session_maker() as session:
+            user = await session.get(User, user_id)
+            if not user:
+                return False
+            return user.is_moderator
+
     async def get_users_count(self) -> int:
         """Получение количества пользователей"""
         async with self.session_maker() as session:
