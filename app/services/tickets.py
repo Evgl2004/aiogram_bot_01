@@ -152,7 +152,8 @@ class TicketService:
         self,
         page: int = 1,
         per_page: int = 10,
-        statuses: Optional[List[str]] = None
+        statuses: Optional[List[str]] = None,
+        user_id: Optional[int] = None
     ) -> Tuple[List[Ticket], int]:
         """
         Получение одной страницы списка тикетов с пагинацией.
@@ -160,6 +161,7 @@ class TicketService:
         :param page: Номер страницы (начиная с 1)
         :param per_page: Количество тикетов на одной странице
         :param statuses: Опциональный фильтр по статусам (например, ['open', 'in_progress'])
+        :user_id: Идентификатор пользователя
         :return: Кортеж (список тикетов на текущей странице, общее количество тикетов)
         """
         async with db.session_maker() as session:
@@ -167,6 +169,9 @@ class TicketService:
             query = select(Ticket)
             if statuses:
                 query = query.where(Ticket.status.in_(statuses))
+            # Фильтр по пользователю
+            if user_id:
+                query = query.where(Ticket.user_id == user_id)
 
             # Сортируем от новых к старым
             query = query.order_by(Ticket.created_at.desc())
@@ -210,6 +215,14 @@ class TicketService:
 
             # Округление вверх: (total + per_page - 1) // per_page
             return (total_count + per_page - 1) // per_page
+
+    async def get_user_tickets_count(self, user_id: int) -> int:
+        """Возвращает количество тикетов пользователя"""
+        async with db.session_maker() as session:
+            result = await session.execute(
+                select(func.count(Ticket.id)).where(Ticket.user_id == user_id)
+            )
+            return result.scalar() or 0
 
 
 # Создаем глобальный экземпляр сервиса
