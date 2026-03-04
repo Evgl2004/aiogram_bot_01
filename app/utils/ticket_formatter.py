@@ -25,7 +25,7 @@ def format_ticket_details(ticket: Ticket, messages: Optional[List[TicketMessage]
         f"{status_emoji} <b>Тикет #{ticket.id}</b>\n"
         f"👤 <b>Пользователь:</b> {username}\n"
         f"🕐 <b>Создан:</b> {time_created}\n"
-        f"📌 <b>Статус:</b> {ticket.status}\n\n"
+        f"📌 <b>Статус:</b> {localize_status(ticket.status)}\n\n"
         f"❓ <b>Вопрос:</b>\n"
         f"{question}"
     )
@@ -45,3 +45,14 @@ def format_ticket_details(ticket: Ticket, messages: Optional[List[TicketMessage]
         details += f"\n\n🔒 <b>Закрыт:</b> {closed_time}"
 
     return details
+
+
+def localize_status(status: str) -> str:
+    """Переводит статус тикета на русский язык"""
+
+    status_map = {
+        "open": "Открыт",
+        "in_progress": "В работе",
+        "closed": "Закрыт"
+    }
+    return status_map.get(status, status)

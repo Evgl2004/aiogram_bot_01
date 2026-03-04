@@ -22,6 +22,25 @@ import html
 # Создаем роутер для Обработчика модерации
 router = Router()
 
+# Константы фильтров
+FILTER_ALL = 'all'
+FILTER_OPEN = 'open'
+FILTER_IN_PROGRESS = 'in_progress'
+
+# Соответствие фильтров статусам
+FILTER_STATUS_MAP = {
+    FILTER_ALL: None,
+    FILTER_OPEN: ['open'],
+    FILTER_IN_PROGRESS: ['in_progress'],
+}
+
+# Названия для заголовков
+FILTER_TITLES = {
+    FILTER_ALL: "Все тикеты",
+    FILTER_OPEN: "Новые тикеты",
+    FILTER_IN_PROGRESS: "Тикеты в работе",
+}
+
 
 async def is_moderator(user_id: int) -> bool:
     """Проверка, является ли пользователь модератором"""
@@ -121,31 +140,37 @@ async def mod_tickets_list(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("mod_tickets_page_"))
-async def mod_tickets_page(callback: CallbackQuery):
+@router.callback_query(F.data.startswith("mod_tickets_"))
+async def mod_tickets_filtered(callback: CallbackQuery, state: FSMContext):
     """
-    Обработчик переключения страниц списка тикетов.
-    Ожидает callback_data вида "mod_tickets_page_2", где 2 – номер страницы.
+    Обработчик для отображения списка тикетов с фильтром.
+    Ожидает callback_data вида mod_tickets_all, mod_tickets_open, mod_tickets_progress.
     """
-    # Проверяем права модератора
+
     if not await is_moderator(callback.from_user.id):
         await callback.answer("❌ У вас нет прав модератора", show_alert=True)
         return
 
-    # Извлекаем номер страницы из callback_data (последний элемент после '_')
-    try:
-        page = int(callback.data.split("_")[-1])
-    except ValueError:
-        await callback.answer("❌ Ошибка в номере страницы", show_alert=True)
+    # Извлекаем фильтр из callback_data (после mod_tickets_)
+    filter_key = callback.data.split("_")[-1]
+    if filter_key not in FILTER_STATUS_MAP:
+        await callback.answer("❌ Неизвестный фильтр", show_alert=True)
         return
 
-    # Получаем тикеты для запрошенной страницы
-    tickets, total_count = await ticket_service.get_tickets_page(page=page, per_page=10)
+    # Сохраняем текущий фильтр в состояние
+    await state.update_data(current_ticket_filter=filter_key)
+
+    # Получаем первую страницу тикетов
+    statuses = FILTER_STATUS_MAP[filter_key]
+    tickets, total_count = await ticket_service.get_tickets_page(
+        page=1,
+        per_page=10,
+        statuses=statuses
+    )
     total_pages = (total_count + 10 - 1) // 10
 
     if not tickets:
-        # Если на странице нет тикетов (возможно, удалили последний), показываем сообщение
-        text = "📭 На этой странице нет тикетов"
+        text = f"📭 {FILTER_TITLES[filter_key]} отсутствуют."
         await safe_edit_message(
             callback,
             text,
@@ -154,18 +179,84 @@ async def mod_tickets_page(callback: CallbackQuery):
         await callback.answer()
         return
 
-    # Формируем текст с номером текущей страницы
-    text = f"📋 Все тикеты (страница {page}/{total_pages}):"
+    text = f"📋 {FILTER_TITLES[filter_key]} (страница 1/{total_pages}):"
     await safe_edit_message(
         callback,
         text,
-        reply_markup=ModerationKeyboard.tickets_list(tickets, current_page=page, total_pages=total_pages)
+        reply_markup=ModerationKeyboard.tickets_list(
+            tickets,
+            current_page=1,
+            total_pages=total_pages,
+            filter_key=filter_key
+        )
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("mod_tickets_page_"))
+async def mod_tickets_page_filtered(callback: CallbackQuery, state: FSMContext):
+    """
+    Обработчик переключения страниц списка тикетов с фильтром.
+    Ожидает callback_data вида "mod_tickets_page_all_2", "mod_tickets_page_open_1" и т.д.
+    """
+    if not await is_moderator(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав модератора", show_alert=True)
+        return
+
+    # Разбираем callback_data: mod_tickets_page_<filter>_<page>
+    parts = callback.data.split("_")
+    if len(parts) != 5:  # ["mod", "tickets", "page", filter, page_num]
+        await callback.answer("❌ Неверный формат данных", show_alert=True)
+        return
+
+    filter_key = parts[3]
+    try:
+        page = int(parts[4])
+    except ValueError:
+        await callback.answer("❌ Ошибка в номере страницы", show_alert=True)
+        return
+
+    if filter_key not in FILTER_STATUS_MAP:
+        await callback.answer("❌ Неизвестный фильтр", show_alert=True)
+        return
+
+    # Сохраняем фильтр в состояние (для последующего возврата из тикета)
+    await state.update_data(current_ticket_filter=filter_key)
+
+    statuses = FILTER_STATUS_MAP[filter_key]
+    tickets, total_count = await ticket_service.get_tickets_page(
+        page=page,
+        per_page=10,
+        statuses=statuses
+    )
+    total_pages = (total_count + 10 - 1) // 10
+
+    if not tickets:
+        text = f"📭 {FILTER_TITLES[filter_key]} отсутствуют на странице {page}."
+        await safe_edit_message(
+            callback,
+            text,
+            reply_markup=ModerationKeyboard.main_menu()
+        )
+        await callback.answer()
+        return
+
+    text = f"📋 {FILTER_TITLES[filter_key]} (страница {page}/{total_pages}):"
+    await safe_edit_message(
+        callback,
+        text,
+        reply_markup=ModerationKeyboard.tickets_list(
+            tickets,
+            current_page=page,
+            total_pages=total_pages,
+            filter_key=filter_key
+        )
     )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("mod_ticket_"))
-async def mod_ticket_details(callback: CallbackQuery):
+async def mod_ticket_details(callback: CallbackQuery, state: FSMContext):
     """
     Показывает детальную информацию по тикету, включая всю историю переписки.
     """
@@ -182,6 +273,10 @@ async def mod_ticket_details(callback: CallbackQuery):
         await callback.answer("❌ Неверный формат данных", show_alert=True)
         return
 
+    # Получаем текущий фильтр из состояния (если не задан, используем FILTER_ALL = 'all')
+    data = await state.get_data()
+    back_filter = data.get("current_ticket_filter", FILTER_ALL)
+
     # Получаем тикет
     ticket = await ticket_service.get_ticket(ticket_id)
     if not ticket:
@@ -197,7 +292,7 @@ async def mod_ticket_details(callback: CallbackQuery):
         callback,
         ticket_text,
         parse_mode="HTML",
-        reply_markup=ModerationKeyboard.ticket_details(ticket_id, ticket.status)
+        reply_markup=ModerationKeyboard.ticket_details(ticket_id, ticket.status, back_filter)
     )
     await callback.answer()
 
