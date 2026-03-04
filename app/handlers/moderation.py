@@ -25,7 +25,7 @@ router = Router()
 # Константы фильтров
 FILTER_ALL = 'all'
 FILTER_OPEN = 'open'
-FILTER_IN_PROGRESS = 'in_progress'
+FILTER_IN_PROGRESS = 'progress'
 
 # Соответствие фильтров статусам
 FILTER_STATUS_MAP = {

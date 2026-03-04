@@ -19,7 +19,7 @@ class ModerationKeyboard:
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text="📋 Все тикеты", callback_data="mod_tickets_all"))
         builder.row(InlineKeyboardButton(text="🆕 Новые тикеты", callback_data="mod_tickets_open"))
-        builder.row(InlineKeyboardButton(text="🔄 В работе", callback_data="mod_tickets_in_progress"))
+        builder.row(InlineKeyboardButton(text="🔄 В работе", callback_data="mod_tickets_progress"))
         return builder.as_markup()
 
 
