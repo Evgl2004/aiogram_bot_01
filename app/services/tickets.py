@@ -95,6 +95,7 @@ class TicketService:
     
     async def update_ticket_status(self, ticket_id: int, status: str) -> bool:
         """Обновление статуса тикета"""
+
         async with db.session_maker() as session:
             ticket = await session.get(Ticket, ticket_id)
             if not ticket:
@@ -103,11 +104,19 @@ class TicketService:
             # Если статус меняется на in_progress и это первый ответ
             if status == 'in_progress' and ticket.status == 'open':
                 ticket.first_response_at = datetime.now(timezone.utc)
-            
+
+            # Если статус меняется на closed (и ранее не был закрыт)
+            if status == 'closed' and ticket.status != 'closed':
+                ticket.closed_at = datetime.now(timezone.utc)
+
             ticket.status = status
             ticket.updated_at = datetime.now(timezone.utc)
             await session.commit()
             return True
+
+    async def close_ticket(self, ticket_id: int) -> bool:
+        """Закрыть тикет (установить статус 'closed' и время закрытия)"""
+        return await self.update_ticket_status(ticket_id, 'closed')
     
     async def add_message_to_ticket(
         self,
@@ -138,6 +147,69 @@ class TicketService:
                 .order_by(TicketMessage.created_at.asc())
             )
             return result.scalars().all()
+
+    async def get_tickets_page(
+        self,
+        page: int = 1,
+        per_page: int = 10,
+        statuses: Optional[List[str]] = None
+    ) -> Tuple[List[Ticket], int]:
+        """
+        Получение одной страницы списка тикетов с пагинацией.
+
+        :param page: Номер страницы (начиная с 1)
+        :param per_page: Количество тикетов на одной странице
+        :param statuses: Опциональный фильтр по статусам (например, ['open', 'in_progress'])
+        :return: Кортеж (список тикетов на текущей странице, общее количество тикетов)
+        """
+        async with db.session_maker() as session:
+            # Формируем базовый запрос с возможной фильтрацией по статусам
+            query = select(Ticket)
+            if statuses:
+                query = query.where(Ticket.status.in_(statuses))
+
+            # Сортируем от новых к старым
+            query = query.order_by(Ticket.created_at.desc())
+
+            # Получаем общее количество тикетов (без пагинации)
+            # Для этого создаём подзапрос из основного запроса и считаем строки
+            count_query = select(func.count()).select_from(query.subquery())
+            total_count = await session.scalar(count_query) or 0
+
+            # Применяем смещение (offset) и лимит (limit) для пагинации
+            # offset = (номер_страницы - 1) * количество_на_странице
+            query = query.offset((page - 1) * per_page).limit(per_page)
+
+            # Выполняем запрос и получаем тикеты для текущей страницы
+            result = await session.execute(query)
+            tickets = result.scalars().all()
+
+            return tickets, total_count
+
+    async def get_tickets_total_pages(
+        self,
+        per_page: int = 10,
+        statuses: Optional[List[str]] = None
+    ) -> int:
+        """
+        Вычисление общего количества страниц для списка тикетов.
+
+        :param per_page: Количество тикетов на странице
+        :param statuses: Опциональный фильтр по статусам
+        :return: Общее количество страниц (целое число)
+        """
+        async with db.session_maker() as session:
+            # Строим запрос для подсчёта тикетов с учётом фильтра
+            query = select(Ticket)
+            if statuses:
+                query = query.where(Ticket.status.in_(statuses))
+
+            # Подсчитываем общее количество
+            count_query = select(func.count()).select_from(query.subquery())
+            total_count = await session.scalar(count_query) or 0
+
+            # Округление вверх: (total + per_page - 1) // per_page
+            return (total_count + per_page - 1) // per_page
 
 
 # Создаем глобальный экземпляр сервиса

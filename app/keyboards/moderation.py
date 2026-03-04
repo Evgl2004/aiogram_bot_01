@@ -18,42 +18,87 @@ class ModerationKeyboard:
             [InlineKeyboardButton(text="📋 Все тикеты", callback_data="mod_tickets")],
         ]
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
-    
+
     @staticmethod
-    def tickets_list(tickets: List[Ticket]) -> InlineKeyboardMarkup:
-        """Список тикетов"""
+    def tickets_list(
+            tickets: List[Ticket],
+            current_page: int = 1,
+            total_pages: int = 1
+    ) -> InlineKeyboardMarkup:
+        """
+        Создаёт клавиатуру со списком тикетов и кнопками пагинации.
+
+        :param tickets: Список тикетов для отображения на текущей странице
+        :param current_page: Номер текущей страницы
+        :param total_pages: Общее количество страниц
+        :return: InlineKeyboardMarkup с кнопками тикетов и навигации
+        """
         keyboard = []
-        
+
+        # --- Кнопки для каждого тикета ---
         for ticket in tickets:
-            # Определяем эмодзи для статуса
-            status_emoji = "🆕" if ticket.status == "open" else "🔄"
-            
-            # Формируем текст кнопки
+            # Выбираем эмодзи в зависимости от статуса
+            status_emoji = {
+                "open": "🆕",
+                "in_progress": "🔄",
+                "closed": "🔒"
+            }.get(ticket.status, "❓")
+
+            # Формируем подпись: эмодзи, номер тикета, имя пользователя, время
             username = ticket.user_username or ticket.user_first_name or f"ID:{ticket.user_id}"
             time_ago = ModerationKeyboard._format_time_ago(ticket.created_at)
             button_text = f"{status_emoji} #{ticket.id} от {username} ({time_ago})"
-            
+
             keyboard.append([
                 InlineKeyboardButton(
                     text=button_text,
                     callback_data=f"mod_ticket_{ticket.id}"
                 )
             ])
-        
-        # Кнопка назад
+
+        # --- Кнопки навигации по страницам ---
+        # Добавляются только если есть несколько страниц
+        nav_buttons = []
+        if current_page > 1:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="⬅️ Предыдущая",
+                    callback_data=f"mod_tickets_page_{current_page - 1}"
+                )
+            )
+        if current_page < total_pages:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="Следующая ➡️",
+                    callback_data=f"mod_tickets_page_{current_page + 1}"
+                )
+            )
+        if nav_buttons:
+            keyboard.append(nav_buttons)
+
+        # --- Кнопка возврата в главное меню модератора ---
         keyboard.append([
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="mod_main")
+            InlineKeyboardButton(text="🏠 Главное меню", callback_data="mod_main")
         ])
-        
+
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
     
     @staticmethod
-    def ticket_details(ticket_id: int) -> InlineKeyboardMarkup:
-        """Детали тикета"""
-        keyboard = [
-            [InlineKeyboardButton(text="📩 Ответить", callback_data=f"mod_reply_{ticket_id}")],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="mod_tickets")]
-        ]
+    def ticket_details(ticket_id: int, status: str = None) -> InlineKeyboardMarkup:
+        """
+        Клавиатура для детального просмотра тикета.
+        Если тикет закрыт (status='closed'), кнопки ответа и закрытия не показываются.
+        """
+        keyboard = []
+
+        # Кнопки доступны только для открытых и в работе
+        if status != 'closed':
+            keyboard.append([InlineKeyboardButton(text="📩 Ответить", callback_data=f"mod_reply_{ticket_id}")])
+            keyboard.append([InlineKeyboardButton(text="🔒 Закрыть тикет", callback_data=f"mod_close_{ticket_id}")])
+
+        # Кнопка назад всегда
+        keyboard.append([InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="mod_tickets")])
+
         return InlineKeyboardMarkup(inline_keyboard=keyboard)
     
     @staticmethod

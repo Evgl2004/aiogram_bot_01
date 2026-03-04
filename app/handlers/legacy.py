@@ -32,7 +32,8 @@ from app.utils.validation import (
     validate_last_name,
     validate_birth_date,
     validate_email,
-    clean_name
+    clean_name,
+    confirm_text
 )
 from app.utils.profile import show_profile_review as show_profile_review_util
 
@@ -208,6 +209,10 @@ async def process_field_input(message: types.Message, state: FSMContext):
         message (types.Message): Сообщение от пользователя
         state (FSMContext): Контекст состояния
     """
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
 
     user_id = message.from_user.id
     data = await state.get_data()
@@ -391,6 +396,10 @@ async def process_edit_field(message: types.Message, state: FSMContext):
         message (types.Message): Сообщение от пользователя
         state (FSMContext): Контекст состояния
     """
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
 
     user_id = message.from_user.id
     data = await state.get_data()
