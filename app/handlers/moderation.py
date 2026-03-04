@@ -144,7 +144,7 @@ async def mod_tickets_list(callback: CallbackQuery):
 async def mod_tickets_filtered(callback: CallbackQuery, state: FSMContext):
     """
     Обработчик для отображения списка тикетов с фильтром.
-    Ожидает callback_data вида mod_tickets_all, mod_tickets_open, mod_tickets_progress.
+    Ожидает callback_data вида mod_tickets_all, mod_tickets_open, mod_tickets_in_progress.
     """
 
     if not await is_moderator(callback.from_user.id):
@@ -174,7 +174,7 @@ async def mod_tickets_filtered(callback: CallbackQuery, state: FSMContext):
         await safe_edit_message(
             callback,
             text,
-            reply_markup=ModerationKeyboard.main_menu()
+            reply_markup=ModerationKeyboard.back_to_main()
         )
         await callback.answer()
         return
@@ -236,7 +236,7 @@ async def mod_tickets_page_filtered(callback: CallbackQuery, state: FSMContext):
         await safe_edit_message(
             callback,
             text,
-            reply_markup=ModerationKeyboard.main_menu()
+            reply_markup=ModerationKeyboard.back_to_main()
         )
         await callback.answer()
         return

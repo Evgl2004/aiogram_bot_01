@@ -19,7 +19,7 @@ class ModerationKeyboard:
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text="📋 Все тикеты", callback_data="mod_tickets_all"))
         builder.row(InlineKeyboardButton(text="🆕 Новые тикеты", callback_data="mod_tickets_open"))
-        builder.row(InlineKeyboardButton(text="🔄 В работе", callback_data="mod_tickets_progress"))
+        builder.row(InlineKeyboardButton(text="🔄 В работе", callback_data="mod_tickets_in_progress"))
         return builder.as_markup()
 
 
@@ -134,3 +134,13 @@ class ModerationKeyboard:
         else:
             days = int(diff.total_seconds() / 86400)
             return f"{days}д"
+
+    @staticmethod
+    def back_to_main() -> InlineKeyboardMarkup:
+        """Клавиатура с одной кнопкой возврата в главное меню"""
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(
+            text="🏠 Главное меню",
+            callback_data="mod_main"
+        ))
+        return builder.as_markup()
