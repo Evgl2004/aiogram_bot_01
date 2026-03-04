@@ -35,6 +35,7 @@ from app.utils.validation import (
     clean_name,
     confirm_text
 )
+from app.utils.message_utils import safe_edit_message
 from app.utils.profile import show_profile_review as show_profile_review_util
 
 router = Router()
@@ -211,7 +212,7 @@ async def process_field_input(message: types.Message, state: FSMContext):
     """
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите значение текстовым сообщением."):
         return
 
     user_id = message.from_user.id
@@ -329,8 +330,10 @@ async def process_review_edit(callback: types.CallbackQuery, state: FSMContext):
     """
 
     await callback.answer()
-    await callback.message.edit_text(
-        "🔧 Выберите, что хотите исправить:",
+    text = "🔧 Выберите, что хотите исправить:"
+    await safe_edit_message(
+        callback,
+        text,
         reply_markup=get_edit_choice_keyboard()
     )
     await state.set_state(LegacyUpgrade.waiting_for_edit_choice)
@@ -360,29 +363,35 @@ async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(edit_field=data)
 
     if data == "edit_first_name":
-        msg = "✍️ Введите новое имя:"
+        text = "✍️ Введите новое имя:"
         next_state = LegacyUpgrade.waiting_for_edit_field
     elif data == "edit_last_name":
-        msg = "✍️ Введите новую фамилию:"
+        text = "✍️ Введите новую фамилию:"
         next_state = LegacyUpgrade.waiting_for_edit_field
     elif data == "edit_gender":
-        await callback.message.edit_text(
-            "Выберите ваш пол:",
+        text = "Выберите ваш пол:"
+        await safe_edit_message(
+            callback,
+            text,
             reply_markup=get_gender_keyboard()
         )
         await state.set_state(LegacyUpgrade.waiting_for_edit_field)
         return
     elif data == "edit_birth_date":
-        msg = "📅 Введите новую дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990):"
+        text = "📅 Введите новую дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990):"
         next_state = LegacyUpgrade.waiting_for_edit_field
     elif data == "edit_email":
-        msg = "📧 Введите новый email:"
+        text = "📧 Введите новый email:"
         next_state = LegacyUpgrade.waiting_for_edit_field
     else:
         await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
         return
 
-    await callback.message.edit_text(msg)
+    await safe_edit_message(
+        callback,
+        text,
+        reply_markup=get_gender_keyboard()
+    )
     await state.set_state(next_state)
 
 
@@ -398,7 +407,7 @@ async def process_edit_field(message: types.Message, state: FSMContext):
     """
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите значение текстовым сообщением."):
         return
 
     user_id = message.from_user.id

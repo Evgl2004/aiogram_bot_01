@@ -16,6 +16,7 @@ from app.keyboards.user_tickets import UserTicketsKeyboard
 from app.utils.ticket_formatter import format_ticket_details
 from app.states.tickets import UserTicketStates
 from app.utils.validation import confirm_text
+from app.utils.message_utils import safe_edit_message
 import html
 
 router = Router()
@@ -38,16 +39,21 @@ async def user_tickets_list(callback: CallbackQuery):
     total_pages = (total_count + 5 - 1) // 5
 
     if not tickets:
-        await callback.message.edit_text(
+        text = (
             "📭 У вас пока нет обращений.\n\n"
-            "Чтобы создать обращение, нажмите «❓ Мне только спросить» в меню отдела заботы.",
+            "Чтобы создать обращение, нажмите «❓ Мне только спросить» в меню отдела заботы."
+        )
+        await safe_edit_message(
+            callback,
+            text,
             reply_markup=UserTicketsKeyboard.back_to_support()
         )
         await callback.answer()
         return
 
     text = f"📋 Ваши обращения (страница 1/{total_pages}):"
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         text,
         reply_markup=UserTicketsKeyboard.tickets_list(tickets, current_page=1, total_pages=total_pages)
     )
@@ -75,15 +81,18 @@ async def user_tickets_page(callback: CallbackQuery):
     total_pages = (total_count + 5 - 1) // 5
 
     if not tickets:
-        await callback.message.edit_text(
-            "📭 На этой странице нет обращений.",
+        text = "📭 На этой странице нет обращений."
+        await safe_edit_message(
+            callback,
+            text,
             reply_markup=UserTicketsKeyboard.back_to_support()
         )
         await callback.answer()
         return
 
     text = f"📋 Ваши обращения (страница {page}/{total_pages}):"
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         text,
         reply_markup=UserTicketsKeyboard.tickets_list(tickets, current_page=page, total_pages=total_pages)
     )
@@ -109,7 +118,8 @@ async def user_ticket_details(callback: CallbackQuery):
     messages = await ticket_service.get_ticket_messages(ticket_id)
     ticket_text = format_ticket_details(ticket, messages)
 
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         ticket_text,
         parse_mode="HTML",
         reply_markup=UserTicketsKeyboard.ticket_details(ticket_id, ticket.status)
@@ -139,9 +149,13 @@ async def user_reply_to_ticket(callback: CallbackQuery, state: FSMContext):
     await state.update_data(reply_ticket_id=ticket_id)
     await state.set_state(UserTicketStates.waiting_for_reply)
 
-    await callback.message.edit_text(
+    text = (
         f"📝 *Ответ на тикет #{ticket_id}*\n\n"
-        f"Введите ваш ответ:",
+        f"Введите ваш ответ:"
+    )
+    await safe_edit_message(
+        callback,
+        text,
         reply_markup=UserTicketsKeyboard.cancel_reply(ticket_id)
     )
     await callback.answer()

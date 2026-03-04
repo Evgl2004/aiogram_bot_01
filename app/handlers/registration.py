@@ -24,6 +24,7 @@ from app.utils.validation import (
     clean_name,
     confirm_text
 )
+from app.utils.message_utils import safe_edit_message
 from app.utils.profile import show_profile_review as show_profile_review_util
 
 import re
@@ -178,7 +179,7 @@ async def process_last_name(message: types.Message, state: FSMContext) -> None:
     """
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите фамилию текстовым сообщением."):
         return
 
     user_id = message.from_user.id
@@ -258,7 +259,7 @@ async def process_birth_date(message: types.Message, state: FSMContext) -> None:
     """
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите дату текстовым сообщением."):
         return
 
     user_id = message.from_user.id
@@ -298,7 +299,7 @@ async def process_email(message: types.Message, state: FSMContext) -> None:
     """
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите почту текстовым сообщением."):
         return
 
     user_id = message.from_user.id
@@ -343,8 +344,10 @@ async def process_review_edit(callback: types.CallbackQuery, state: FSMContext):
     """
 
     await callback.answer()
-    await callback.message.edit_text(
-        "🔧 Выберите, что хотите исправить:",
+    text = "🔧 Выберите, что хотите исправить:"
+    await safe_edit_message(
+        callback,
+        text,
         reply_markup=get_edit_choice_keyboard()
     )
     await state.set_state(Registration.waiting_for_edit_choice)
@@ -362,29 +365,34 @@ async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
 
     if data == "edit_first_name":
         new_state = Registration.waiting_for_edit_first_name
-        msg = "✍️ Введите новое имя:"
+        text = "✍️ Введите новое имя:"
     elif data == "edit_last_name":
         new_state = Registration.waiting_for_edit_last_name
-        msg = "✍️ Введите новую фамилию:"
+        text = "✍️ Введите новую фамилию:"
     elif data == "edit_gender":
         new_state = Registration.waiting_for_edit_gender
-        await callback.message.edit_text(
-            "Выберите ваш пол:",
+        text = "Выберите ваш пол:"
+        await safe_edit_message(
+            callback,
+            text,
             reply_markup=get_gender_keyboard()
         )
         await state.set_state(new_state)
         return
     elif data == "edit_birth_date":
         new_state = Registration.waiting_for_edit_birth_date
-        msg = "📅 Введите новую дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990):"
+        text = "📅 Введите новую дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990):"
     elif data == "edit_email":
         new_state = Registration.waiting_for_edit_email
-        msg = "📧 Введите новый email:"
+        text = "📧 Введите новый email:"
     else:
         await show_profile_review_util(callback, state, Registration.waiting_for_review)
         return
 
-    await callback.message.edit_text(msg)
+    await safe_edit_message(
+        callback,
+        text
+    )
     await state.set_state(new_state)
 
 
@@ -415,7 +423,7 @@ async def process_edit_first_name(message: types.Message, state: FSMContext):
 async def process_edit_last_name(message: types.Message, state: FSMContext):
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите фамилию текстовым сообщением."):
         return
 
     user_id = message.from_user.id
@@ -447,7 +455,7 @@ async def process_edit_gender(callback: types.CallbackQuery, state: FSMContext):
 async def process_edit_birth_date(message: types.Message, state: FSMContext):
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите дату текстовым сообщением."):
         return
 
     user_id = message.from_user.id
@@ -468,7 +476,7 @@ async def process_edit_birth_date(message: types.Message, state: FSMContext):
 async def process_edit_email(message: types.Message, state: FSMContext):
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите почту текстовым сообщением."):
         return
 
     user_id = message.from_user.id
