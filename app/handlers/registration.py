@@ -21,7 +21,8 @@ from app.utils.validation import (
     validate_last_name,
     validate_birth_date,
     validate_email,
-    clean_name
+    clean_name,
+    confirm_text
 )
 from app.utils.profile import show_profile_review as show_profile_review_util
 
@@ -133,6 +134,10 @@ async def process_first_name(message: types.Message, state: FSMContext) -> None:
     Сохраняет имя, затем переводит в состояние ввода фамилии.
     """
 
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
+
     user_id = message.from_user.id
     # Получаем текст сообщения, удаляем лишние пробелы
     first_name_text = message.text.strip() if message.text else ""
@@ -171,6 +176,10 @@ async def process_last_name(message: types.Message, state: FSMContext) -> None:
     - после проверки очищает от лишних пробелов.
     Сохраняет имя, затем переводит в состояние ввода пола.
     """
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
 
     user_id = message.from_user.id
     # Получаем текст сообщения, удаляем лишние пробелы
@@ -248,6 +257,10 @@ async def process_birth_date(message: types.Message, state: FSMContext) -> None:
     При успехе сохраняет дату в поле birth_date и переходит к запросу email.
     """
 
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
+
     user_id = message.from_user.id
     text = message.text.strip() if message.text else ""
 
@@ -283,6 +296,10 @@ async def process_email(message: types.Message, state: FSMContext) -> None:
     Сохраняет email в поле email пользователя, устанавливает is_registered = True
     и завершает регистрацию, показывая главное меню.
     """
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
 
     user_id = message.from_user.id
     email = message.text.strip() if message.text else ""
@@ -374,6 +391,11 @@ async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
 # --- Обработчики редактирования каждого поля ---
 @router.message(Registration.waiting_for_edit_first_name)
 async def process_edit_first_name(message: types.Message, state: FSMContext):
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
+
     user_id = message.from_user.id
     first_name_text = message.text.strip() if message.text else ""
 
@@ -391,6 +413,11 @@ async def process_edit_first_name(message: types.Message, state: FSMContext):
 
 @router.message(Registration.waiting_for_edit_last_name)
 async def process_edit_last_name(message: types.Message, state: FSMContext):
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
+
     user_id = message.from_user.id
     last_name_text = message.text.strip() if message.text else ""
 
@@ -418,6 +445,11 @@ async def process_edit_gender(callback: types.CallbackQuery, state: FSMContext):
 
 @router.message(Registration.waiting_for_edit_birth_date)
 async def process_edit_birth_date(message: types.Message, state: FSMContext):
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
+
     user_id = message.from_user.id
     text = message.text.strip()
 
@@ -434,6 +466,11 @@ async def process_edit_birth_date(message: types.Message, state: FSMContext):
 
 @router.message(Registration.waiting_for_edit_email)
 async def process_edit_email(message: types.Message, state: FSMContext):
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
+
     user_id = message.from_user.id
     email = message.text.strip()
 

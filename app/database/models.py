@@ -280,6 +280,9 @@ class Ticket(Base):
     """Дата и время последнего обновления тикета."""
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    """Дата и время закрытия тикета (если статус closed)."""
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     def __repr__(self) -> str:
         return f"<Ticket(id={self.id}, user_id={self.user_id}, status={self.status})>"
 

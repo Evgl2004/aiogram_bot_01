@@ -3,6 +3,7 @@
 import re
 from datetime import datetime, date
 from typing import Tuple
+from aiogram.types import Message
 
 
 async def validate_first_name(value: str) -> Tuple[bool, str]:
@@ -106,3 +107,15 @@ async def clean_name(value: str) -> str:
         str: Очищенное значение
     """
     return re.sub(r'\s+', ' ', value).strip()
+
+
+async def confirm_text(message: Message, error_text: str = "❌ Пожалуйста, отправьте текстовое сообщение.") -> bool:
+    """
+    Проверяет, содержит ли сообщение текст.
+    Если нет – отправляет пользователю сообщение об ошибке и возвращает False.
+    """
+    if not message.text:
+        await message.answer(error_text)
+        return False
+    return True
+

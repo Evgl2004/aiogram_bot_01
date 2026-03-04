@@ -17,6 +17,7 @@ from app.keyboards.menu import (
     get_back_to_support_keyboard,
 )
 from app.states.tickets import TicketStates
+from app.utils.validation import confirm_text
 
 router = Router()
 
@@ -182,6 +183,11 @@ async def process_question_text(message: types.Message, state: FSMContext):
     """
     Обработчик текста вопроса от пользователя.
     """
+
+    # Проверка ввода только текста
+    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+        return
+
     # Получаем информацию о пользователе
     user = await db.get_user(message.from_user.id)
     if not user:
@@ -212,11 +218,11 @@ async def process_question_text(message: types.Message, state: FSMContext):
 
         # Формируем текст уведомления
         notification_text = (
-            f"📬 Новый тикет от пользователя!\n\n"
+            f"📬 *Новый тикет от пользователя!*\n\n"
             f"🎫 Тикет #{ticket.id}\n"
             f"👤 Пользователь: {message.from_user.username or message.from_user.first_name}\n"
             f"❓ Вопрос: {message.text[:100]}{'...' if len(message.text) > 100 else ''}\n\n"
-            f"📊 Статистика:\n"
+            f"📊 *Статистика:*\n"
             f"📬 Новые тикеты: {open_count}\n"
             f"🔄 В работе: {in_progress_count}\n"
         )
