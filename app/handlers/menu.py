@@ -138,7 +138,8 @@ async def process_vacancies(callback: types.CallbackQuery):
         callback,
         text,
         parse_mode="Markdown",
-        disable_web_page_preview=True
+        disable_web_page_preview=True,
+        reply_markup=get_back_to_main_keyboard()
     )
 
 
