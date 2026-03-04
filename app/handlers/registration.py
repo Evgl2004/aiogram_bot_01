@@ -26,8 +26,11 @@ from app.utils.validation import (
 )
 from app.utils.message_utils import safe_edit_message
 from app.utils.profile import show_profile_review as show_profile_review_util
+from app.services import iiko_service
+from app.keyboards.iiko import retry_keyboard
+from app.utils.qr import generate_qr_code
 
-import re
+
 from datetime import datetime, date, timezone
 from typing import Union
 
@@ -496,8 +499,8 @@ async def process_edit_email(message: types.Message, state: FSMContext):
 async def process_notifications_consent(callback: types.CallbackQuery, state: FSMContext) -> None:
     """
     Обрабатывает выбор пользователя по согласию на уведомления.
-    Сохраняет значение notifications_allowed (True/False) в БД,
-    устанавливает is_registered = True и завершает регистрацию.
+    Сохраняет выбор, но не завершает регистрацию полностью.
+    Переводит в состояние ожидания регистрации в iiko.
     """
 
     user_id = callback.from_user.id
@@ -512,12 +515,11 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
 
     logger.info(f"Пользователь user_id={user_id} {choice_text}")
 
-    # Обновляем запись: согласие на уведомления и дату, а также признак завершения регистрации
+    # Обновляем запись: согласие на уведомления и дату
     await db.update_user(
         user_id,
         notifications_allowed=notifications_allowed,
-        notifications_allowed_at=datetime.now(timezone.utc),
-        is_registered=True
+        notifications_allowed_at=datetime.now(timezone.utc)
     )
 
     # Отвечаем на callback (убираем "часики" на кнопке)
@@ -526,14 +528,133 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     # Убираем клавиатуру из сообщения
     await callback.message.edit_reply_markup(reply_markup=None)
 
-    # Получаем обновлённые данные пользователя (для приветствия)
-    user = await db.get_user(user_id)
-    name = user.first_name_input or "Гость"
+    # Переходим к регистрации в iiko
+    await state.set_state(Registration.waiting_for_iiko_registration)
+    await perform_iiko_registration(callback, state)
 
-    # Вызываем главное меню
+
+async def perform_iiko_registration(obj: Union[types.CallbackQuery, types.Message], state: FSMContext) -> None:
+    """
+    Выполняет регистрацию пользователя в системе iiko и выпуск бонусной карты.
+    Функция может вызываться как из callback-запроса, так и из обычного сообщения.
+    При успешном завершении (карта есть или создана) устанавливает is_registered = True
+    и показывает главное меню. При ошибке предлагает повторить попытку через клавиатуру retry_keyboard.
+    """
+    # 1. Получаем ID пользователя и загружаем его данные из БД
+    user_id = obj.from_user.id
+    user = await db.get_user(user_id)
+    if not user:
+        text = "❌ Ошибка: пользователь не найден. Начните регистрацию заново с команды /start."
+        # Отправляем сообщение в зависимости от типа объекта
+        if isinstance(obj, types.CallbackQuery):
+            await obj.message.answer(text)
+            await obj.answer()
+        else:
+            await obj.answer(text)
+        await state.clear()
+        return
+
+    # Проверяем наличие номера телефона (должен быть сохранён ранее)
+    if not user.phone_number:
+        text = "❌ Ошибка: номер телефона не найден. Пройдите регистрацию заново."
+        if isinstance(obj, types.CallbackQuery):
+            await obj.message.answer(text)
+            await obj.answer()
+        else:
+            await obj.answer(text)
+        await state.clear()
+        return
+
+    phone = user.phone_number
+    name = user.first_name_input or ""
+
+    # 2. Пытаемся получить информацию о клиенте из iiko
+    try:
+        client_info = await iiko_service.get_customer_info(phone)
+    except Exception as e:
+        logger.error(f"Ошибка при запросе iiko для пользователя {user_id}: {e}")
+        client_info = None  # считаем, что клиент не найден (или ошибка сети)
+
+    customer_id = None
+
+    # 3. Если клиент не найден в iiko (или ошибка), регистрируем нового
+    if client_info is None:
+        customer_id, reg_msg = await iiko_service.register_customer(phone, name)
+        if not customer_id:
+            # Ошибка регистрации – показываем сообщение и клавиатуру для повтора
+            text = f"❌ Не удалось зарегистрировать вас в бонусной системе.\nПричина: {reg_msg}\n\nПопробуйте позже."
+            if isinstance(obj, types.CallbackQuery):
+                await obj.message.edit_text(text, reply_markup=retry_keyboard())
+                await obj.answer()
+            else:
+                await obj.answer(text, reply_markup=retry_keyboard())
+            return  # остаёмся в состоянии waiting_for_iiko_registration
+    else:
+        # Клиент существует – извлекаем его ID
+        customer_id = client_info.get('customer_id')
+        if not customer_id:
+            # Странная ситуация: клиент есть, но ID отсутствует
+            text = "❌ Не удалось получить идентификатор клиента. Попробуйте позже."
+            if isinstance(obj, types.CallbackQuery):
+                await obj.message.edit_text(text, reply_markup=retry_keyboard())
+                await obj.answer()
+            else:
+                await obj.answer(text, reply_markup=retry_keyboard())
+            return
+
+    # На этом этапе customer_id точно есть (либо получен из существующего, либо создан)
+
+    # 4. Проверяем, есть ли у клиента уже карты
+    if client_info and client_info.get('cards'):
+        # Карты уже есть – регистрация в iiko успешно завершена
+        await db.update_user(user_id, is_registered=True)
+        # Показываем главное меню
+        await show_main_menu(
+            chat_id=obj.message.chat.id,
+            bot=obj.bot,
+            state=state,
+            user_name=user.first_name_input or "Гость"
+        )
+        return
+
+    # 5. Если карт нет, выпускаем новую карту
+    success, card_msg, card_number = await iiko_service.issue_card_for_customer(phone, customer_id, name)
+    if not success:
+        # Ошибка выпуска карты
+        text = f"❌ Не удалось выпустить карту.\nПричина: {card_msg}\n\nПопробуйте позже."
+        if isinstance(obj, types.CallbackQuery):
+            await obj.message.edit_text(text, reply_markup=retry_keyboard())
+            await obj.answer()
+        else:
+            await obj.answer(text, reply_markup=retry_keyboard())
+        return
+
+    # 6. Карта успешно выпущена
+    await db.update_user(user_id, is_registered=True)
+
+    # Генерируем и отправляем QR-код новой карты
+    qr_photo = await generate_qr_code(card_number)
+    caption = f"✅ Регистрация в бонусной системе завершена!\n💳 Ваша карта: {card_number}"
+    if isinstance(obj, types.CallbackQuery):
+        await obj.message.answer_photo(photo=qr_photo, caption=caption)
+    else:
+        await obj.answer_photo(photo=qr_photo, caption=caption)
+
+    # Показываем главное меню
     await show_main_menu(
-        chat_id=callback.message.chat.id,
-        bot=callback.bot,
+        chat_id=obj.message.chat.id,
+        bot=obj.bot,
         state=state,
-        user_name=name
+        user_name=user.first_name_input or "Гость"
     )
+
+
+@router.callback_query(lambda c: c.data == "retry_iiko_registration", Registration.waiting_for_iiko_registration)
+async def retry_iiko_registration(callback: types.CallbackQuery, state: FSMContext):
+    """
+    Обрабатывает нажатие на кнопку "🔄 Повторить попытку" при ошибке регистрации в iiko.
+    Повторно запускает процесс регистрации, не меняя состояние FSM.
+    """
+
+    await callback.answer()
+    await perform_iiko_registration(callback, state)

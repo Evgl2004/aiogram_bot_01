@@ -13,10 +13,14 @@ class Settings(BaseSettings):
     # Bot settings
     bot_token: str = Field(..., alias="BOT_TOKEN")
     bot_username: str = Field("", alias="BOT_USERNAME")
+
+    # iiko settings
+    IIKO_API_KEY: str = os.getenv("IIKO_API_KEY", "")
+    DEFAULT_ORG_ID: str = os.getenv("DEFAULT_ORG_ID", "73cbeaf9-b885-470f-b674-5bea708dd39f")
     
     # Admin settings
     admin_user_ids: str = Field("[]", alias="ADMIN_USER_IDS")
-    
+
     # Database settings
     postgres_host: str = Field("localhost", alias="POSTGRES_HOST")
     postgres_port: int = Field(5432, alias="POSTGRES_PORT")
