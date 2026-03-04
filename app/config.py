@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     bot_username: str = Field("", alias="BOT_USERNAME")
 
     # iiko settings
-    IIKO_API_KEY: str = os.getenv("IIKO_API_KEY", "")
-    DEFAULT_ORG_ID: str = os.getenv("DEFAULT_ORG_ID", "73cbeaf9-b885-470f-b674-5bea708dd39f")
+    IIKO_API_KEY: str = Field("", alias="IIKO_API_KEY")
+    DEFAULT_ORG_ID: str = Field("73cbeaf9-b885-470f-b674-5bea708dd39f", alias="DEFAULT_ORG_ID")
     
     # Admin settings
     admin_user_ids: str = Field("[]", alias="ADMIN_USER_IDS")
