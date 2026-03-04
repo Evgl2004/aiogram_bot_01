@@ -19,6 +19,8 @@ from app.keyboards.menu import (
 from app.states.tickets import TicketStates
 from app.utils.validation import confirm_text
 from app.utils.message_utils import safe_edit_message
+from app.services import iiko_service
+from app.keyboards.iiko import retry_keyboard
 
 router = Router()
 
@@ -69,28 +71,101 @@ async def process_balance(callback: types.CallbackQuery):
 @router.callback_query(lambda c: c.data == "virtual_card")
 async def process_virtual_card(callback: types.CallbackQuery):
     """
-    Генерирует и отправляет QR-код с номером телефона пользователя.
+    Показывает все карты пользователя из iiko с QR-кодами.
+    Если карт нет – выпускает автоматически.
+    Если клиент не найден в iiko – регистрирует и выпускает карту.
     """
-
     await callback.answer()
+
+    # Получаем номер телефона пользователя из БД
     user = await db.get_user(callback.from_user.id)
-    if not user:
-        await callback.answer("Пользователь не найден", show_alert=True)
+    if not user or not user.phone_number:
+        text = "❌ У вас не указан номер телефона. Пожалуйста, пройдите регистрацию через /start"
+        await callback.message.edit_text(text, reply_markup=get_back_to_main_keyboard())
         return
 
-    phone = user.phone_number or "+70000000000"  # Заглушка, если номера нет
+    phone = user.phone_number
+    name = user.first_name_input or ""
 
-    # Генерируем QR-код
-    photo = await generate_qr_code(phone)
+    # Запрашиваем информацию о клиенте из iiko
+    client_info = await iiko_service.get_customer_info(phone)
 
-    await callback.message.answer_photo(
-        photo=photo,
-        caption="🪪 Ваш QR-код для предъявления на кассе.\n"
-                f"Номер телефона: {phone}",
+    # Если клиент не найден – регистрируем
+    if client_info is None:
+        # Пытаемся зарегистрировать клиента в iiko
+        customer_id, reg_msg = await iiko_service.register_customer(phone, name)
+        if not customer_id:
+            # Ошибка регистрации – показываем сообщение и кнопку повтора
+            text = f"❌ Не удалось зарегистрировать вас в бонусной системе.\nПричина: {reg_msg}\n\nПопробуйте позже."
+            await callback.message.edit_text(text, reply_markup=retry_keyboard())
+            return
+        # Теперь клиент создан, можно выпускать карту
+        client_info = {'customer_id': customer_id, 'cards': []}
+    else:
+        # Клиент существует – проверяем наличие customer_id
+        if not client_info.get('customer_id'):
+            # Аномалия – нет ID, пробуем перерегистрировать
+            customer_id, reg_msg = await iiko_service.register_customer(phone, name)
+            if not customer_id:
+                text = f"❌ Ошибка получения данных клиента. Попробуйте позже."
+                await callback.message.edit_text(text, reply_markup=retry_keyboard())
+                return
+            client_info['customer_id'] = customer_id
+
+    # Теперь у нас есть customer_id (в client_info или полученный)
+    customer_id = client_info['customer_id']
+    cards = client_info.get('cards', [])
+
+    # Если карт нет – выпускаем
+    if not cards:
+        success, msg, card_number = await iiko_service.issue_card_for_customer(phone, customer_id, name)
+        if not success:
+            text = f"❌ Не удалось выпустить карту.\nПричина: {msg}\n\nПопробуйте позже."
+            await callback.message.edit_text(text, reply_markup=retry_keyboard())
+            return
+        # Обновляем список карт (можно просто добавить новую, но проще перезапросить)
+        client_info = await iiko_service.get_customer_info(phone)
+        if not client_info:
+            # Если даже после выпуска не получили – странно, но покажем карту
+            cards = [{'number': card_number}]
+        else:
+            cards = client_info.get('cards', [])
+            if not cards:
+                cards = [{'number': card_number}]
+
+    # Удаляем предыдущее сообщение с кнопками
+    await callback.message.delete()
+
+    # Отправляем QR-коды для каждой карты
+    for card in cards:
+        card_number = card['number']
+        qr_photo = await generate_qr_code(card_number)
+        caption = f"💳 Карта: {card_number}"
+        if card.get('valid_to'):
+            caption += f"\nДействует до: {card['valid_to']}"
+        await callback.message.answer_photo(
+            photo=qr_photo,
+            caption=caption
+        )
+
+    # Итоговое сообщение
+    card_count = len(cards)
+    if card_count == 1:
+        ending = "карта"
+    elif 1 < card_count < 5:
+        ending = "карты"
+    else:
+        ending = "карт"
+    final_text = (
+        f"✅ Это все ваши бонусные {ending} ({card_count} шт.).\n"
+        "Вы можете показать любой QR-код официанту для начисления бонусов.\n\n"
+        "*Данная программа лояльности не распространяется на УСЛУГИ ДОСТАВКИ, "
+        "столовые 'Ассорти', мастерскую сыра «Страчателли»*"
+    )
+    await callback.message.answer(
+        final_text,
         reply_markup=get_back_to_main_keyboard()
     )
-    # Удаляем предыдущее сообщение с кнопками (чтобы не захламлять)
-    await callback.message.delete()
 
 
 @router.callback_query(lambda c: c.data == "support")

@@ -30,3 +30,5 @@ class Registration(StatesGroup):
     waiting_for_edit_email = State()                # редактирование email
 
     waiting_for_notifications_consent = State()     # согласие на уведомления
+
+    waiting_for_iiko_registration = State()         # состояние ожидания регистрации в iiko

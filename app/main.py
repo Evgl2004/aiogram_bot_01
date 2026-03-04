@@ -18,6 +18,8 @@ from app.handlers import setup_routers
 from app.middlewares import setup_middlewares
 from app.database import db
 
+from app.services import iiko_service
+
 
 async def check_local_api_available() -> bool:
     """Проверка доступности Local Bot API Server"""
@@ -83,6 +85,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
 async def on_startup(bot: Bot) -> None:
     """Действия при запуске бота"""
+
     # Инициализируем базу данных
     try:
         await db.create_tables()
@@ -90,6 +93,14 @@ async def on_startup(bot: Bot) -> None:
         logger.info("✅ Database initialized successfully")
     except Exception as e:
         logger.error(f"❌ Failed to initialize database: {e}")
+        sys.exit(1)
+
+    # Инициализируем клиент iiko
+    try:
+        await iiko_service.init_iiko_client()
+        logger.info("✅ iiko client initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize iiko client: {e}")
         sys.exit(1)
     
     bot_info = await bot.get_me()
@@ -100,7 +111,13 @@ async def on_startup(bot: Bot) -> None:
 
 async def on_shutdown(bot: Bot) -> None:
     """Действия при остановке бота"""
+
     logger.info("🛑 Bot is shutting down...")
+
+    # Закрываем клиент iiko
+    await iiko_service.close_iiko_client()
+    logger.info("🛑 iiko client closed")
+
     await bot.session.close()
 
 
