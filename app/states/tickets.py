@@ -12,3 +12,8 @@ class TicketStates(StatesGroup):
     
     # Состояние ожидания ответа модератора на тикет
     waiting_for_moderator_reply = State()
+
+
+class UserTicketStates(StatesGroup):
+    # Состояние ожидания ответа на тикет
+    waiting_for_reply = State()

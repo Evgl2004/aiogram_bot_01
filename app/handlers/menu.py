@@ -94,15 +94,17 @@ async def process_virtual_card(callback: types.CallbackQuery):
 
 @router.callback_query(lambda c: c.data == "support")
 async def process_support(callback: types.CallbackQuery):
-    """
-    Показывает вложенное меню отдела заботы.
-    """
-
+    """Показывает вложенное меню отдела заботы с учётом наличия тикетов"""
     await callback.answer()
+
+    user_id = callback.from_user.id
+    tickets_count = await ticket_service.get_user_tickets_count(user_id)
+    has_tickets = tickets_count > 0
+
     await callback.message.edit_text(
         "🆘 *Отдел заботы*\n\nВыберите действие:",
         parse_mode="Markdown",
-        reply_markup=get_support_submenu_keyboard()
+        reply_markup=get_support_submenu_keyboard(has_tickets=has_tickets)
     )
 
 
@@ -185,7 +187,7 @@ async def process_question_text(message: types.Message, state: FSMContext):
     """
 
     # Проверка ввода только текста
-    if not await confirm_text(message, "✍️ Пожалуйста, введите имя текстовым сообщением."):
+    if not await confirm_text(message, "✍️ Пожалуйста, введите вопрос текстовым сообщением."):
         return
 
     # Получаем информацию о пользователе
@@ -300,8 +302,12 @@ async def process_back_to_support(callback: types.CallbackQuery, state: FSMConte
     # Очищаем состояние при возврате в отдел заботы
     await state.clear()
 
+    user_id = callback.from_user.id
+    tickets_count = await ticket_service.get_user_tickets_count(user_id)
+    has_tickets = tickets_count > 0
+
     await callback.message.edit_text(
         "🆘 *Отдел заботы*\n\nВыберите действие:",
         parse_mode="Markdown",
-        reply_markup=get_support_submenu_keyboard()
+        reply_markup=get_support_submenu_keyboard(has_tickets=has_tickets)
     )

@@ -15,6 +15,7 @@ from .menu import router as menu_router
 from .legacy import router as legacy_router
 from .admin import combined_router as admin_router
 from .moderation import router as moderation_router
+from app.handlers import user_tickets
 
 
 def setup_routers(dp: Dispatcher) -> None:
@@ -32,3 +33,4 @@ def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(legacy_router)            # Роутер апгрейда устаревших пользователей
     dp.include_router(admin_router)             # Роутер команд администратора
     dp.include_router(moderation_router)        # Роутер модерации
+    dp.include_router(user_tickets.router)      # Роутер меню обращений

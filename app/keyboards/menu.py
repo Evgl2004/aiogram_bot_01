@@ -23,11 +23,12 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_support_submenu_keyboard() -> InlineKeyboardMarkup:
+def get_support_submenu_keyboard(has_tickets: bool = False) -> InlineKeyboardMarkup:
     """
-    Подменю отдела заботы:
+    Клавиатура подменю отдела заботы:
     - Оставить отзыв
     - Мне только спросить
+    - Мои обращения - отображается только если есть тикеты.
     - Контакты
     - 🔙 Назад в меню
     """
@@ -35,6 +36,8 @@ def get_support_submenu_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="✍️ Оставить отзыв", callback_data="support_feedback"))
     builder.row(InlineKeyboardButton(text="❓ Мне только спросить", callback_data="support_question"))
+    if has_tickets:
+        builder.row(InlineKeyboardButton(text="📋 Мои обращения", callback_data="my_tickets"))
     builder.row(InlineKeyboardButton(text="📧 Контакты", callback_data="support_contacts"))
     builder.row(InlineKeyboardButton(text="🔙 Назад в меню", callback_data="back_to_main"))
     return builder.as_markup()

@@ -11,6 +11,7 @@ from loguru import logger
 from app.database import db
 from app.services.tickets import ticket_service
 from app.keyboards.moderation import ModerationKeyboard
+from app.keyboards.user_tickets import UserTicketsKeyboard
 from app.states.tickets import TicketStates
 
 from app.utils.validation import confirm_text
@@ -274,7 +275,8 @@ async def mod_send_reply(message: Message, state: FSMContext):
                 f"📝 <b>Ответ от модератора:</b>\n"
                 f"{html.escape(message.text)}"
             ),
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=UserTicketsKeyboard.notification_keyboard(ticket_id, ticket.status)
         )
     except Exception as e:
         logger.error(f"Ошибка при отправке ответа пользователю: {e}")
