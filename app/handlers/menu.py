@@ -18,6 +18,7 @@ from app.keyboards.menu import (
 )
 from app.states.tickets import TicketStates
 from app.utils.validation import confirm_text
+from app.utils.message_utils import safe_edit_message
 
 router = Router()
 
@@ -95,14 +96,18 @@ async def process_virtual_card(callback: types.CallbackQuery):
 @router.callback_query(lambda c: c.data == "support")
 async def process_support(callback: types.CallbackQuery):
     """Показывает вложенное меню отдела заботы с учётом наличия тикетов"""
+
     await callback.answer()
 
     user_id = callback.from_user.id
     tickets_count = await ticket_service.get_user_tickets_count(user_id)
     has_tickets = tickets_count > 0
 
-    await callback.message.edit_text(
-        "🆘 *Отдел заботы*\n\nВыберите действие:",
+    text = "🆘 *Отдел заботы*\n\nВыберите действие:"
+
+    await safe_edit_message(
+        callback,
+        text,
         parse_mode="Markdown",
         reply_markup=get_support_submenu_keyboard(has_tickets=has_tickets)
     )
@@ -128,10 +133,11 @@ async def process_vacancies(callback: types.CallbackQuery):
         "бренда Тюмени – переходи по ссылке и оставляй заявку!\n\n"
         "👉 [Посмотреть все вакансии](https://team.sobolevalliance.su/vacancy)"
     )
-    await callback.message.edit_text(
+
+    await safe_edit_message(
+        callback,
         text,
         parse_mode="Markdown",
-        reply_markup=get_back_to_main_keyboard(),
         disable_web_page_preview=True
     )
 
@@ -149,7 +155,9 @@ async def process_feedback(callback: types.CallbackQuery):
         "Мы будем рады узнать ваше мнение! Перейдите по ссылке ниже:\n"
         "👉 [Форма обратной связи](https://example.com/feedback) (ссылка будет заменена)"
     )
-    await callback.message.edit_text(
+
+    await safe_edit_message(
+        callback,
         text,
         parse_mode="Markdown",
         reply_markup=get_back_to_support_keyboard(),
@@ -173,7 +181,9 @@ async def process_question(callback: types.CallbackQuery, state: FSMContext):
         "Пожалуйста, отправьте ваш вопрос, и наш модератор свяжется с вами в ближайшее время.\n\n"
         "Введите ваш вопрос:"
     )
-    await callback.message.edit_text(
+
+    await safe_edit_message(
+        callback,
         text,
         parse_mode="Markdown",
         reply_markup=get_back_to_support_keyboard()
@@ -262,7 +272,9 @@ async def process_contacts(callback: types.CallbackQuery):
         "Сайт: https://sobolevalliance.su\n"
         "Соцсети: @sobolevalliance"
     )
-    await callback.message.edit_text(
+
+    await safe_edit_message(
+        callback,
         text,
         reply_markup=get_back_to_support_keyboard()
     )
@@ -306,8 +318,11 @@ async def process_back_to_support(callback: types.CallbackQuery, state: FSMConte
     tickets_count = await ticket_service.get_user_tickets_count(user_id)
     has_tickets = tickets_count > 0
 
-    await callback.message.edit_text(
-        "🆘 *Отдел заботы*\n\nВыберите действие:",
+    text = "🆘 *Отдел заботы*\n\nВыберите действие:"
+
+    await safe_edit_message(
+        callback,
+        text,
         parse_mode="Markdown",
         reply_markup=get_support_submenu_keyboard(has_tickets=has_tickets)
     )

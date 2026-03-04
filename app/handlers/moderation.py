@@ -16,6 +16,7 @@ from app.states.tickets import TicketStates
 
 from app.utils.validation import confirm_text
 from app.utils.ticket_formatter import format_ticket_details
+from app.utils.message_utils import safe_edit_message
 import html
 
 # Создаем роутер для Обработчика модерации
@@ -76,8 +77,9 @@ async def mod_main_callback(callback: CallbackQuery):
         stats_text += f"⏱ Среднее время ответа: {avg_response_time} мин\n"
     else:
         stats_text += "⏱ Среднее время ответа: -\n"
-    
-    await callback.message.edit_text(
+
+    await safe_edit_message(
+        callback,
         stats_text,
         reply_markup=ModerationKeyboard.main_menu()
     )
@@ -100,8 +102,10 @@ async def mod_tickets_list(callback: CallbackQuery):
 
     if not tickets:
         # Если тикетов нет вообще, показываем сообщение и меню
-        await callback.message.edit_text(
-            "📭 Нет тикетов",
+        text = "📭 Нет тикетов"
+        await safe_edit_message(
+            callback,
+            text,
             reply_markup=ModerationKeyboard.main_menu()
         )
         await callback.answer()
@@ -109,7 +113,8 @@ async def mod_tickets_list(callback: CallbackQuery):
 
     # Формируем текст с указанием текущей страницы
     text = f"📋 Все тикеты (страница 1/{total_pages}):"
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         text,
         reply_markup=ModerationKeyboard.tickets_list(tickets, current_page=1, total_pages=total_pages)
     )
@@ -140,8 +145,10 @@ async def mod_tickets_page(callback: CallbackQuery):
 
     if not tickets:
         # Если на странице нет тикетов (возможно, удалили последний), показываем сообщение
-        await callback.message.edit_text(
-            "📭 На этой странице нет тикетов",
+        text = "📭 На этой странице нет тикетов"
+        await safe_edit_message(
+            callback,
+            text,
             reply_markup=ModerationKeyboard.main_menu()
         )
         await callback.answer()
@@ -149,7 +156,8 @@ async def mod_tickets_page(callback: CallbackQuery):
 
     # Формируем текст с номером текущей страницы
     text = f"📋 Все тикеты (страница {page}/{total_pages}):"
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         text,
         reply_markup=ModerationKeyboard.tickets_list(tickets, current_page=page, total_pages=total_pages)
     )
@@ -185,7 +193,8 @@ async def mod_ticket_details(callback: CallbackQuery):
     # Форматируем через общую функцию
     ticket_text = format_ticket_details(ticket, messages)
 
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         ticket_text,
         parse_mode="HTML",
         reply_markup=ModerationKeyboard.ticket_details(ticket_id, ticket.status)
@@ -215,10 +224,14 @@ async def mod_reply_to_ticket(callback: CallbackQuery, state: FSMContext):
     await state.set_state(TicketStates.waiting_for_moderator_reply)
 
     # Отправляем сообщение с просьбой ввести ответ
-    await callback.message.edit_text(
+    text = (
         f"📝 *Ответ на тикет #{ticket_id}*\n\n"
         f"Введите ваш ответ пользователю:\n"
-        f"(Поддерживается HTML форматирование)",
+        f"(Поддерживается HTML форматирование)"
+    )
+    await safe_edit_message(
+        callback,
+        text,
         reply_markup=ModerationKeyboard.reply_to_ticket(ticket_id)
     )
     await callback.answer()
@@ -349,7 +362,11 @@ async def mod_close_ticket(callback: CallbackQuery):
     # Получаем обновлённый тикет для отображения
     ticket = await ticket_service.get_ticket(ticket_id)
     if not ticket:
-        await callback.message.edit_text("❌ Ошибка при загрузке тикета")
+        text = "❌ Ошибка при загрузке тикета"
+        await safe_edit_message(
+            callback,
+            text
+        )
         return
 
     # Получаем сообщения (историю)
@@ -358,7 +375,8 @@ async def mod_close_ticket(callback: CallbackQuery):
     # Формируем текст аналогично mod_ticket_details
     ticket_text = format_ticket_details(ticket, messages)
 
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         ticket_text,
         parse_mode="HTML",
         reply_markup=ModerationKeyboard.ticket_details(ticket_id, ticket.status)
