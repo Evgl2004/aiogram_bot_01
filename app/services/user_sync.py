@@ -14,6 +14,7 @@ from app.services import iiko_service
 from app.keyboards.iiko import retry_keyboard
 from app.utils.qr import generate_qr_code
 from app.handlers.menu import show_main_menu
+from app.utils.telegram_helpers import send_safe_message, edit_safe_message
 
 
 async def sync_user_with_iiko(
@@ -30,11 +31,7 @@ async def sync_user_with_iiko(
     phone = user.phone_number
     if not phone:
         text = "❌ Ошибка: номер телефона не найден."
-        if isinstance(obj, types.CallbackQuery):
-            await obj.message.answer(text)
-            await obj.answer()
-        else:
-            await obj.answer(text)
+        await send_safe_message(obj, text)
         await state.clear()
         return
 
@@ -50,11 +47,9 @@ async def sync_user_with_iiko(
         customer_id, reg_msg = await iiko_service.register_customer(user)
         if not customer_id:
             text = f"❌ Не удалось зарегистрировать в iiko.\nПричина: {reg_msg}"
+            await edit_safe_message(obj, text, reply_markup=retry_keyboard())
             if isinstance(obj, types.CallbackQuery):
-                await obj.message.edit_text(text, reply_markup=retry_keyboard())
                 await obj.answer()
-            else:
-                await obj.answer(text, reply_markup=retry_keyboard())
             return
         # Клиент создан, карт пока нет
         client_info = {'customer_id': customer_id, 'cards': []}
@@ -63,11 +58,9 @@ async def sync_user_with_iiko(
         customer_id, upd_msg = await iiko_service.register_customer(user)  # create_or_update
         if not customer_id:
             text = f"❌ Не удалось обновить данные в iiko.\nПричина: {upd_msg}"
+            await edit_safe_message(obj, text, reply_markup=retry_keyboard())
             if isinstance(obj, types.CallbackQuery):
-                await obj.message.edit_text(text, reply_markup=retry_keyboard())
                 await obj.answer()
-            else:
-                await obj.answer(text, reply_markup=retry_keyboard())
             return
         # Используем полученный customer_id
         client_info['customer_id'] = customer_id
@@ -81,11 +74,9 @@ async def sync_user_with_iiko(
         )
         if not success:
             text = f"❌ Не удалось выпустить карту.\nПричина: {card_msg}"
+            await edit_safe_message(obj, text, reply_markup=retry_keyboard())
             if isinstance(obj, types.CallbackQuery):
-                await obj.message.edit_text(text, reply_markup=retry_keyboard())
                 await obj.answer()
-            else:
-                await obj.answer(text, reply_markup=retry_keyboard())
             return
         # Обновляем список карт
         client_info = await iiko_service.get_customer_info(phone)

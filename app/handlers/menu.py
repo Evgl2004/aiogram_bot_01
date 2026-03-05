@@ -18,9 +18,10 @@ from app.keyboards.menu import (
 )
 from app.states.tickets import TicketStates
 from app.utils.validation import confirm_text
-from app.utils.message_utils import safe_edit_message
 from app.services import iiko_service
 from app.keyboards.iiko import retry_keyboard
+from app.utils.message_utils import safe_edit_message
+from app.utils.telegram_helpers import send_safe_message, edit_safe_message
 
 router = Router()
 
@@ -61,7 +62,8 @@ async def process_balance(callback: types.CallbackQuery):
         "Количество бонусов к сгоранию: —\n"
         "Количество посещений до нового уровня: 3\n"
     )
-    await callback.message.edit_text(
+    await safe_edit_message(
+        callback,
         text,
         parse_mode="Markdown",
         reply_markup=get_back_to_main_keyboard()
@@ -82,7 +84,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
     user = await db.get_user(callback.from_user.id)
     if not user or not user.phone_number:
         text = "❌ У вас не указан номер телефона. Пожалуйста, пройдите регистрацию через /start"
-        await callback.message.edit_text(text, reply_markup=get_back_to_main_keyboard())
+        await safe_edit_message(callback, text, reply_markup=get_back_to_main_keyboard())
         return
 
     phone = user.phone_number
@@ -98,7 +100,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
         if not customer_id:
             # Ошибка регистрации – показываем сообщение и кнопку повтора
             text = f"❌ Не удалось зарегистрировать вас в бонусной системе.\nПричина: {reg_msg}\n\nПопробуйте позже."
-            await callback.message.edit_text(text, reply_markup=retry_keyboard())
+            await safe_edit_message(callback, text, reply_markup=retry_keyboard())
             return
         # Теперь клиент создан, можно выпускать карту
         client_info = {'customer_id': customer_id, 'cards': []}
@@ -109,7 +111,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
             customer_id, reg_msg = await iiko_service.register_customer(phone, name)
             if not customer_id:
                 text = f"❌ Ошибка получения данных клиента. Попробуйте позже."
-                await callback.message.edit_text(text, reply_markup=retry_keyboard())
+                await safe_edit_message(callback, text, reply_markup=retry_keyboard())
                 return
             client_info['customer_id'] = customer_id
 
@@ -122,7 +124,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
         success, msg, card_number = await iiko_service.issue_card_for_customer(phone, customer_id, name)
         if not success:
             text = f"❌ Не удалось выпустить карту.\nПричина: {msg}\n\nПопробуйте позже."
-            await callback.message.edit_text(text, reply_markup=retry_keyboard())
+            await safe_edit_message(callback, text, reply_markup=retry_keyboard())
             return
         # Обновляем список карт (можно просто добавить новую, но проще перезапросить)
         client_info = await iiko_service.get_customer_info(phone)
@@ -163,7 +165,8 @@ async def process_virtual_card(callback: types.CallbackQuery):
         "*Данная программа лояльности не распространяется на УСЛУГИ ДОСТАВКИ, "
         "столовые 'Ассорти', мастерскую сыра «Страчателли»*"
     )
-    await callback.message.answer(
+    await send_safe_message(
+        callback,
         final_text,
         reply_markup=get_back_to_main_keyboard()
     )
@@ -187,6 +190,7 @@ async def process_support(callback: types.CallbackQuery):
         parse_mode="Markdown",
         reply_markup=get_support_submenu_keyboard(has_tickets=has_tickets)
     )
+    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "vacancies")
@@ -376,7 +380,7 @@ async def process_back_to_main(callback: types.CallbackQuery, state: FSMContext)
     name = user.first_name_input or "Гость"
     text = f"👋 {name}, вы в главном меню.\nВыберите раздел:"
     # Отправляем новое сообщение с главным меню
-    await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
+    await send_safe_message(callback, text, reply_markup=get_main_menu_keyboard())
     # Удаляем текущее сообщение (с которого пришёл callback)
     await callback.message.delete()
 

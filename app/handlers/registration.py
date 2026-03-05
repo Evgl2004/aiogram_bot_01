@@ -26,6 +26,7 @@ from app.utils.validation import (
 from app.utils.message_utils import safe_edit_message
 from app.utils.profile import show_profile_review as show_profile_review_util
 from app.services.user_sync import sync_user_with_iiko
+from app.utils.telegram_helpers import send_safe_message, edit_safe_message
 
 
 from datetime import datetime, date, timezone
@@ -525,11 +526,15 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     # Убираем клавиатуру из сообщения
     await callback.message.edit_reply_markup(reply_markup=None)
 
+    # нужно получить объект пользователя
+    user = await db.get_user(user_id)
+    if not user:
+        await send_safe_message(callback, "❌ Ошибка загрузки пользователя")
+        await state.clear()
+        return
+
     # Переходим к регистрации в iiko
     await state.set_state(Registration.waiting_for_iiko_registration)
-    # нужно получить объект пользователя
-    user = await db.get_user(callback.from_user.id)
-
     await sync_user_with_iiko(callback, state, user)
 
 
@@ -543,7 +548,7 @@ async def retry_iiko_registration(callback: types.CallbackQuery, state: FSMConte
     await callback.answer()
     user = await db.get_user(callback.from_user.id)
     if not user:
-        await callback.message.answer("❌ Ошибка загрузки пользователя")
+        await send_safe_message(callback, "❌ Ошибка загрузки пользователя")
         await state.clear()
         return
     await sync_user_with_iiko(callback, state, user)
