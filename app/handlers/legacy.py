@@ -388,13 +388,6 @@ async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
         await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
         return
 
-    await safe_edit_message(
-        callback,
-        text,
-        reply_markup=get_gender_keyboard()
-    )
-    await state.set_state(next_state)
-
 
 @router.message(LegacyUpgrade.waiting_for_edit_field)
 async def process_edit_field(message: types.Message, state: FSMContext):
