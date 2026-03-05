@@ -52,6 +52,9 @@ async def register_customer(user) -> Tuple[Optional[str], str]:
     # Форматируем дату рождения
     birth_date_str = user.birth_date.strftime("%Y-%m-%d") if user.birth_date else None
 
+    # Определяем consent_status: 1 если rules_accepted=True, иначе 0 (unknown)
+    consent_status = 1 if user.rules_accepted else 0
+
     return await _get_client().register_customer(
         phone=user.phone_number,
         name=user.first_name_input or "",
