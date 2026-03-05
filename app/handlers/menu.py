@@ -49,19 +49,45 @@ async def show_main_menu(chat_id: int, bot: Bot, state: FSMContext, user_name: s
 @router.callback_query(lambda c: c.data == "balance")
 async def process_balance(callback: types.CallbackQuery):
     """
-    Показывает информацию о балансе (заглушка).
+    Показывает информацию о балансе бонусов из iiko.
     """
-
     await callback.answer()
-    # Заглушка, позже данные будут подтягиваться из API
+
+    # Получаем пользователя из БД
+    user = await db.get_user(callback.from_user.id)
+    if not user or not user.phone_number:
+        text = "❌ У вас не указан номер телефона. Пожалуйста, пройдите регистрацию."
+        await safe_edit_message(callback, text, reply_markup=get_back_to_main_keyboard())
+        return
+
+    # Запрашиваем информацию о клиенте из iiko
+    client_info = await iiko_service.get_customer_info(user.phone_number)
+
+    if client_info is None:
+        # Клиент не найден в iiko – возможно, ошибка или ещё не зарегистрирован
+        text = (
+            "❌ Информация о бонусах временно недоступна.\n"
+            "Пожалуйста, попробуйте позже или обратитесь к администратору."
+        )
+        await safe_edit_message(callback, text, reply_markup=get_back_to_main_keyboard())
+        return
+
+    # Извлекаем баланс
+    balance = client_info.get('balance', 0)
+    # Форматируем баланс с двумя знаками после запятой (если нужно)
+    formatted_balance = f"{balance:.2f}".replace('.', ',')
+
+    # Поля, которые пока не удаётся получить из API (заглушки)
+    expiration_date = "—"
+    expiring_bonuses = "—"
+
     text = (
-        "💰 *Твой баланс*\n\n"
-        "Твои бонусы: 0\n"
-        "Твой уровень: 3%\n"
-        "Ближайшая дата сгорания: —\n"
-        "Количество бонусов к сгоранию: —\n"
-        "Количество посещений до нового уровня: 3\n"
+        f"💰 *Ваш бонусный баланс*\n\n"
+        f"Текущие бонусы: {formatted_balance}\n"
+        f"Ближайшая дата сгорания: {expiration_date}\n"
+        f"Количество бонусов к сгоранию: {expiring_bonuses}\n"
     )
+
     await safe_edit_message(
         callback,
         text,
