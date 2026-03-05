@@ -40,9 +40,28 @@ async def get_customer_info(phone: str) -> Optional[Dict[str, Any]]:
     return await _get_client().get_customer_info(phone)
 
 
-async def register_customer(phone: str, name: str = "") -> Tuple[Optional[str], str]:
-    """Регистрирует клиента в iiko."""
-    return await _get_client().register_customer(phone, name)
+async def register_customer(user) -> Tuple[Optional[str], str]:
+    """
+    Регистрирует клиента в iiko, используя все доступные данные из анкеты.
+    """
+
+    # Преобразуем пол в формат iiko (1 - male, 2 - female)
+    sex_map = {"male": 1, "female": 2}
+    sex = sex_map.get(user.gender) if user.gender else None
+
+    # Форматируем дату рождения
+    birth_date_str = user.birth_date.strftime("%Y-%m-%d") if user.birth_date else None
+
+    return await _get_client().register_customer(
+        phone=user.phone_number,
+        name=user.first_name_input or "",
+        surname=user.last_name_input or "",
+        birth_date=birth_date_str,
+        sex=sex,
+        email=user.email or "",
+        should_receive_promo=user.notifications_allowed,
+        should_receive_loyalty=user.notifications_allowed
+    )
 
 
 async def add_card(customer_id: str, card_number: str) -> Tuple[bool, str]:
@@ -65,8 +84,18 @@ async def issue_card_for_customer(phone: str, customer_id: str, name: str = "") 
     Полный процесс выдачи карты клиенту.
     Возвращает (успех, сообщение, номер_карты).
     """
+
     from datetime import datetime
-    phone_digits = ''.join(filter(str.isdigit, phone))
+
+    # Создаём пустую строку, куда будем добавлять цифры
+    phone_digits = ""
+
+    # Перебираем каждый символ в исходной строке
+    for character in phone:
+        # Если символ – цифра, добавляем его к результату
+        if character.isdigit():
+            phone_digits += character
+
     card_number = f"{phone_digits}_{datetime.now().strftime('%Y%m%d')}"
 
     ok, msg = await add_card(customer_id, card_number)

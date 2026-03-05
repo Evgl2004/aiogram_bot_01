@@ -75,6 +75,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
     Если карт нет – выпускает автоматически.
     Если клиент не найден в iiko – регистрирует и выпускает карту.
     """
+
     await callback.answer()
 
     # Получаем номер телефона пользователя из БД
@@ -93,7 +94,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
     # Если клиент не найден – регистрируем
     if client_info is None:
         # Пытаемся зарегистрировать клиента в iiko
-        customer_id, reg_msg = await iiko_service.register_customer(phone, name)
+        customer_id, reg_msg = await iiko_service.register_customer(user)
         if not customer_id:
             # Ошибка регистрации – показываем сообщение и кнопку повтора
             text = f"❌ Не удалось зарегистрировать вас в бонусной системе.\nПричина: {reg_msg}\n\nПопробуйте позже."

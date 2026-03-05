@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Tuple, List
 
 import aiohttp
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, AsyncRetrying
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.config import settings
 from loguru import logger
@@ -84,7 +84,16 @@ class AsyncIikoApi:
 
     def _format_phone(self, phone: str) -> str:
         """Приводит номер телефона к формату +7XXXXXXXXXX."""
-        digits = ''.join(filter(str.isdigit, phone))
+
+        # Создаём пустую строку, куда будем добавлять цифры
+        digits = ""
+
+        # Перебираем каждый символ в исходной строке
+        for character in phone:
+            # Если символ – цифра, добавляем его к результату
+            if character.isdigit():
+                digits += character
+
         if digits.startswith('7'):
             return f"+{digits}"
         elif digits.startswith('8'):
@@ -137,11 +146,23 @@ class AsyncIikoApi:
             logger.error(f"Сетевая ошибка при запросе информации о клиенте: {e}")
             return None
 
-    async def register_customer(self, phone: str, name: str = "") -> Tuple[Optional[str], str]:
+    async def register_customer(
+            self,
+            phone: str,
+            name: str = "",
+            surname: str = "",
+            middle_name: str = "",
+            birth_date: Optional[str] = None,
+            sex: Optional[int] = None,
+            email: str = "",
+            should_receive_promo: bool = True,
+            should_receive_loyalty: bool = True
+    ) -> Tuple[Optional[str], str]:
         """
         Регистрирует нового клиента или обновляет существующего.
         Возвращает (customer_id, сообщение).
         """
+
         token = await self._get_token()
         if not token:
             return None, "❌ Не удалось получить токен авторизации"
@@ -151,13 +172,25 @@ class AsyncIikoApi:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}"
         }
+        # Формируем словарь с данными, исключая пустые значения
         data = {
             "phone": formatted_phone,
             "name": name,
-            "shouldReceiveLoyaltyInfo": True,
-            "shouldReceivePromoActionsInfo": True,
+            "shouldReceivePromoActionsInfo": should_receive_promo,
+            "shouldReceiveLoyaltyInfo": should_receive_loyalty,
             "organizationId": self.organization_id
         }
+        # Добавляем поля, только если они предоставлены
+        if surname:
+            data["surname"] = surname
+        if middle_name:
+            data["middleName"] = middle_name
+        if birth_date:
+            data["birthDate"] = birth_date
+        if sex is not None:
+            data["sex"] = sex
+        if email:
+            data["email"] = email
 
         session = await self._get_session()
         try:
