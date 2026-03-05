@@ -155,6 +155,7 @@ class AsyncIikoApi:
             birth_date: Optional[str] = None,
             sex: Optional[int] = None,
             email: str = "",
+            consent_status: int = 0,
             should_receive_promo: bool = True,
             should_receive_loyalty: bool = True
     ) -> Tuple[Optional[str], str]:
@@ -178,6 +179,7 @@ class AsyncIikoApi:
             "name": name,
             "shouldReceivePromoActionsInfo": should_receive_promo,
             "shouldReceiveLoyaltyInfo": should_receive_loyalty,
+            "consentStatus": consent_status,
             "organizationId": self.organization_id
         }
         # Добавляем поля, только если они предоставлены

@@ -361,25 +361,29 @@ async def process_edit_choice(callback: types.CallbackQuery, state: FSMContext):
 
     if data == "edit_first_name":
         text = "✍️ Введите новое имя:"
-        next_state = LegacyUpgrade.waiting_for_edit_field
+        await safe_edit_message(callback, text)
+        await state.set_state(LegacyUpgrade.waiting_for_edit_field)
+        return
     elif data == "edit_last_name":
         text = "✍️ Введите новую фамилию:"
-        next_state = LegacyUpgrade.waiting_for_edit_field
+        await safe_edit_message(callback, text)
+        await state.set_state(LegacyUpgrade.waiting_for_edit_field)
+        return
     elif data == "edit_gender":
         text = "Выберите ваш пол:"
-        await safe_edit_message(
-            callback,
-            text,
-            reply_markup=get_gender_keyboard()
-        )
+        await safe_edit_message(callback, text, reply_markup=get_gender_keyboard())
         await state.set_state(LegacyUpgrade.waiting_for_edit_field)
         return
     elif data == "edit_birth_date":
         text = "📅 Введите новую дату рождения в формате ДД.ММ.ГГГГ (например, 25.12.1990):"
-        next_state = LegacyUpgrade.waiting_for_edit_field
+        await safe_edit_message(callback, text)
+        await state.set_state(LegacyUpgrade.waiting_for_edit_field)
+        return
     elif data == "edit_email":
         text = "📧 Введите новый email:"
-        next_state = LegacyUpgrade.waiting_for_edit_field
+        await safe_edit_message(callback, text)
+        await state.set_state(LegacyUpgrade.waiting_for_edit_field)
+        return
     else:
         await show_profile_review_util(callback, state, LegacyUpgrade.waiting_for_review)
         return
