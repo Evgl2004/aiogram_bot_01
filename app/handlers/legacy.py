@@ -147,11 +147,6 @@ async def start_legacy_upgrade(obj: Union[types.Message, types.CallbackQuery], s
     )
     await send_safe_message(obj, text)
 
-    text = (
-        "👋 Здравствуй, друг! Мы обновили бота и хотим убедиться, "
-        "что твои данные актуальны, а также получить необходимые согласия. "
-        "Это займёт всего пару минут."
-    )
     # Показываем правила
     await send_safe_message(
         obj,

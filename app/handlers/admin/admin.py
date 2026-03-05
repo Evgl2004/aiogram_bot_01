@@ -3,8 +3,6 @@
 """
 
 import re
-from datetime import datetime
-from typing import Optional
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command, StateFilter
@@ -46,18 +44,15 @@ async def admin_command(message: Message, bot: Bot):
     last_restart = stats.last_restart.strftime("%d.%m.%Y %H:%M:%S")
     
     # Формируем сообщение со статистикой
-    text = f"""
-🔧 <b>Админская панель</b>
-
-📊 <b>Статистика бота:</b>
-👥 Всего пользователей: <b>{total_users}</b>
-✅ Активных пользователей: <b>{active_users}</b>
-🟢 Статус: <b>{stats.status}</b>
-🕐 Последний запуск: <b>{last_restart}</b>
-
-Выберите действие:
-"""
-    
+    text = (
+        f"🔧 <b>Админская панель</b>\n\n"
+        f"📊 <b>Статистика бота:</b>\n"
+        f"👥 Всего пользователей: <b>{total_users}</b>\n"
+        f"✅ Активных пользователей: <b>{active_users}</b>\n"
+        f"🟢 Статус: <b>{stats.status}</b>\n"
+        f"🕐 Последний запуск: <b>{last_restart}</b>\n\n"
+        f"Выберите действие:"
+    )
     await message.answer(
         text=text,
         reply_markup=AdminKeyboards.main_admin_menu()
@@ -162,7 +157,6 @@ async def receive_broadcast_button(message: Message, state: FSMContext):
     )
     
     # Переходим к подтверждению
-    data = await state.get_data()
     users_count = await db.get_active_users_count()
     
     await message.answer(
@@ -300,4 +294,4 @@ async def cancel_any_state(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("❌ Операция отменена")
     else:
-        await message.answer("ℹ️ Нет активных операций для отмены") 
+        await message.answer("ℹ️ Нет активных операций для отмены")

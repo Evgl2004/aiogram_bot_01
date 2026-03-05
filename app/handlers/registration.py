@@ -26,11 +26,10 @@ from app.utils.validation import (
 from app.utils.message_utils import safe_edit_message
 from app.utils.profile import show_profile_review as show_profile_review_util
 from app.services.user_sync import sync_user_with_iiko
-from app.utils.telegram_helpers import send_safe_message, edit_safe_message
+from app.utils.telegram_helpers import send_safe_message
 
 
-from datetime import datetime, date, timezone
-from typing import Union
+from datetime import datetime, timezone
 
 router = Router()
 

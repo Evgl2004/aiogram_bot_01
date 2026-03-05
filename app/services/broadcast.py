@@ -2,7 +2,7 @@
 Сервис рассылки сообщений
 """
 import asyncio
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict
 from aiogram import Bot
 from aiogram.types import Message, InlineKeyboardMarkup
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -190,4 +190,4 @@ class BroadcastService:
         except Exception as e:
             # Неожиданные ошибки
             logger.error(f"Неожиданная ошибка при отправке пользователю {user_id}: {e}")
-            return False 
+            return False

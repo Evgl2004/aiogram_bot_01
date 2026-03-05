@@ -28,7 +28,7 @@ async def sync_user_with_iiko(
     При ошибке предлагает повторить.
     """
 
-    phone = user.phone_number
+    phone: str = user.phone_number
     if not phone:
         text = "❌ Ошибка: номер телефона не найден."
         await send_safe_message(obj, text)
@@ -71,9 +71,7 @@ async def sync_user_with_iiko(
     cards = client_info.get('cards', [])
     if not cards:
         # Выпускаем карту
-        success, card_msg, card_number = await iiko_service.issue_card_for_customer(
-            phone, client_info['customer_id'], user.first_name_input or ""
-        )
+        success, card_msg, card_number = await iiko_service.issue_card_for_customer(phone, client_info['customer_id'])
         if not success:
             text = f"❌ Не удалось выпустить карту.\nПричина: {card_msg}"
             await edit_safe_message(obj, text, reply_markup=retry_keyboard())

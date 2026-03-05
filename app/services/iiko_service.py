@@ -79,7 +79,7 @@ async def add_customer_to_program(customer_id: str, program_id: Optional[str] = 
     return await _get_client().add_customer_to_program(customer_id, program_id)
 
 
-async def issue_card_for_customer(phone: str, customer_id: str, name: str = "") -> Tuple[bool, str, Optional[str]]:
+async def issue_card_for_customer(phone: str, customer_id: str) -> Tuple[bool, str, Optional[str]]:
     """
     Полный процесс выдачи карты клиенту.
     Возвращает (успех, сообщение, номер_карты).

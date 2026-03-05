@@ -21,7 +21,7 @@ from app.utils.validation import confirm_text
 from app.services import iiko_service
 from app.keyboards.iiko import retry_keyboard
 from app.utils.message_utils import safe_edit_message
-from app.utils.telegram_helpers import send_safe_message, edit_safe_message
+from app.utils.telegram_helpers import send_safe_message
 
 router = Router()
 
@@ -88,7 +88,6 @@ async def process_virtual_card(callback: types.CallbackQuery):
         return
 
     phone = user.phone_number
-    name = user.first_name_input or ""
 
     # Запрашиваем информацию о клиенте из iiko
     client_info = await iiko_service.get_customer_info(phone)
@@ -108,7 +107,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
         # Клиент существует – проверяем наличие customer_id
         if not client_info.get('customer_id'):
             # Аномалия – нет ID, пробуем перерегистрировать
-            customer_id, reg_msg = await iiko_service.register_customer(phone, name)
+            customer_id, reg_msg = await iiko_service.register_customer(user)
             if not customer_id:
                 text = f"❌ Ошибка получения данных клиента. Попробуйте позже."
                 await safe_edit_message(callback, text, reply_markup=retry_keyboard())
@@ -121,7 +120,7 @@ async def process_virtual_card(callback: types.CallbackQuery):
 
     # Если карт нет – выпускаем
     if not cards:
-        success, msg, card_number = await iiko_service.issue_card_for_customer(phone, customer_id, name)
+        success, msg, card_number = await iiko_service.issue_card_for_customer(phone, customer_id)
         if not success:
             text = f"❌ Не удалось выпустить карту.\nПричина: {msg}\n\nПопробуйте позже."
             await safe_edit_message(callback, text, reply_markup=retry_keyboard())
@@ -320,8 +319,8 @@ async def process_question_text(message: types.Message, state: FSMContext):
             f"🔄 В работе: {in_progress_count}\n"
         )
 
-        # Отправляем уведомление всем модераторам
-        # Используем готовый метод из db для получения модераторов
+        # Отправляем уведомление всем модераторам.
+        # Используем готовый метод из db для получения модераторов.
         moderators = await db.get_moderators()
 
         for moderator in moderators:
