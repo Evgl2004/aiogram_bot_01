@@ -34,6 +34,8 @@ async def sync_user_with_iiko(
         await send_safe_message(obj, text)
         await state.clear()
         return
+    # Инициализируем переменную для номера карты (на случай, если карта не выпускалась)
+    card_number = None
 
     # 1. Пытаемся получить информацию о клиенте
     try:
