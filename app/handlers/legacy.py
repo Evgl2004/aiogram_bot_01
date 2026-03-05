@@ -26,7 +26,6 @@ from app.keyboards.registration import (
     get_edit_choice_keyboard,
 )
 from app.states.legacy import LegacyUpgrade
-from app.handlers.menu import show_main_menu
 from app.utils.validation import (
     validate_first_name,
     validate_last_name,
@@ -38,7 +37,7 @@ from app.utils.validation import (
 from app.utils.message_utils import safe_edit_message
 from app.utils.profile import show_profile_review as show_profile_review_util
 from app.services.user_sync import sync_user_with_iiko
-from app.keyboards.iiko import retry_keyboard
+from app.utils.telegram_helpers import send_safe_message, edit_safe_message
 
 router = Router()
 
@@ -102,11 +101,9 @@ async def ask_next_field(user_id: int,
         text = "✍️ Введите вашу фамилию:"
         next_state = LegacyUpgrade.waiting_for_field
     elif field == 'gender':
-        # Для пола используем inline-клавиатуру
-        if isinstance(obj, types.Message):
-            await obj.answer("Выберите ваш пол:", reply_markup=get_gender_keyboard())
-        else:
-            await obj.message.edit_text("Выберите ваш пол:", reply_markup=get_gender_keyboard())
+        await edit_safe_message(obj, "Выберите ваш пол:", reply_markup=get_gender_keyboard())
+        if isinstance(obj, types.CallbackQuery):
+            await obj.answer()
         await state.set_state(LegacyUpgrade.waiting_for_field)
         return
     elif field == 'birth_date':
@@ -148,13 +145,16 @@ async def start_legacy_upgrade(obj: Union[types.Message, types.CallbackQuery], s
         "что твои данные актуальны, а также получить необходимые согласия. "
         "Это займёт всего пару минут."
     )
-    if isinstance(obj, types.Message):
-        await obj.answer(text)
-    else:
-        await obj.message.answer(text)
+    await send_safe_message(obj, text)
 
+    text = (
+        "👋 Здравствуй, друг! Мы обновили бота и хотим убедиться, "
+        "что твои данные актуальны, а также получить необходимые согласия. "
+        "Это займёт всего пару минут."
+    )
     # Показываем правила
-    await obj.message.answer(
+    await send_safe_message(
+        obj,
         "📜 Для начала нам необходимо получить твоё согласие на обработку персональных данных "
         "и согласие с политикой конфиденциальности.\n\n"
         "👉 Ознакомься с документами по ссылке ниже и нажми «✅ Согласен».",
@@ -504,7 +504,7 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     # Получаем актуального пользователя
     user = await db.get_user(user_id)
     if not user:
-        await callback.message.answer("❌ Ошибка загрузки пользователя")
+        await send_safe_message(callback, "❌ Ошибка загрузки пользователя")
         await state.clear()
         return
 
@@ -525,7 +525,7 @@ async def retry_iiko_registration(callback: types.CallbackQuery, state: FSMConte
     await callback.answer()
     user = await db.get_user(callback.from_user.id)
     if not user:
-        await callback.message.answer("❌ Ошибка загрузки пользователя")
+        await send_safe_message(callback, "❌ Ошибка загрузки пользователя")
         await state.clear()
         return
     await sync_user_with_iiko(callback, state, user)
