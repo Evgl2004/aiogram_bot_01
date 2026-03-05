@@ -16,4 +16,4 @@ class LegacyUpgrade(StatesGroup):
     waiting_for_edit_choice = State()               # выбор поля для редактирования
     waiting_for_edit_field = State()                # редактирование конкретного поля
     waiting_for_notifications_consent = State()     # согласие на уведомления
-    waiting_for_iiko_registration = State()         # проверка наличия карты
+    waiting_for_iiko_registration = State()         # проверка регистрации в iiko

@@ -37,6 +37,8 @@ from app.utils.validation import (
 )
 from app.utils.message_utils import safe_edit_message
 from app.utils.profile import show_profile_review as show_profile_review_util
+from app.services.user_sync import sync_user_with_iiko
+from app.keyboards.iiko import retry_keyboard
 
 router = Router()
 
@@ -480,12 +482,7 @@ async def process_edit_gender(callback: types.CallbackQuery, state: FSMContext):
 async def process_notifications_consent(callback: types.CallbackQuery, state: FSMContext):
     """
     Обрабатывает выбор пользователя по согласию на уведомления.
-    Сохраняет выбор с датой, снимает признак is_legacy, выводит финальное сообщение
-    и показывает главное меню.
-
-    Args:
-        callback (types.CallbackQuery): Callback-запрос
-        state (FSMContext): Контекст состояния
+    Сохраняет выбор, снимает флаг is_legacy и запускает синхронизацию с iiko.
     """
 
     user_id = callback.from_user.id
@@ -493,7 +490,7 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     choice_text = "согласился на уведомления" if notifications_allowed else "отказался от уведомлений"
     logger.info(f"Legacy user {user_id} {choice_text}")
 
-    # Сохраняем согласие и снимаем признак legacy
+    # Сохраняем согласие и снимаем признак legacy (is_registered пока не ставим)
     await db.update_user(
         user_id,
         notifications_allowed=notifications_allowed,
@@ -504,18 +501,31 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
 
+    # Получаем актуального пользователя
     user = await db.get_user(user_id)
-    name = user.first_name_input or "Гость"
+    if not user:
+        await callback.message.answer("❌ Ошибка загрузки пользователя")
+        await state.clear()
+        return
 
-    # Финальное сообщение
-    await callback.message.answer(
-        f"✅ Спасибо, {name}! Твои данные сохранены. Добро пожаловать в обновлённый бот!"
-    )
+    # Переходим к синхронизации с iiko
+    await state.set_state(LegacyUpgrade.waiting_for_iiko_registration)
+    await sync_user_with_iiko(callback, state, user)
 
-    # Показываем главное меню
-    await show_main_menu(
-        chat_id=callback.message.chat.id,
-        bot=callback.bot,
-        state=state,
-        user_name=name
-    )
+
+@router.callback_query(
+    lambda c: c.data == "retry_iiko_registration",
+    LegacyUpgrade.waiting_for_iiko_registration
+)
+async def retry_iiko_registration(callback: types.CallbackQuery, state: FSMContext):
+    """
+    Повторная попытка синхронизации с iiko при ошибке.
+    """
+
+    await callback.answer()
+    user = await db.get_user(callback.from_user.id)
+    if not user:
+        await callback.message.answer("❌ Ошибка загрузки пользователя")
+        await state.clear()
+        return
+    await sync_user_with_iiko(callback, state, user)
