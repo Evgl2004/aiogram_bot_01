@@ -40,7 +40,7 @@ async def get_customer_info(phone: str) -> Optional[Dict[str, Any]]:
     return await _get_client().get_customer_info(phone)
 
 
-async def register_customer(user) -> Tuple[Optional[str], str]:
+async def register_customer(user, customer_id: Optional[str] = None) -> Tuple[Optional[str], str]:
     """
     Регистрирует клиента в iiko, используя все доступные данные из анкеты.
     """
@@ -49,8 +49,8 @@ async def register_customer(user) -> Tuple[Optional[str], str]:
     sex_map = {"male": 1, "female": 2}
     sex = sex_map.get(user.gender) if user.gender else None
 
-    # Форматируем дату рождения
-    birth_date_str = user.birth_date.strftime("%Y-%m-%d") if user.birth_date else None
+    # Формат даты для iiko: "yyyy-MM-dd HH:mm:ss.fff"
+    birth_date_str = user.birth_date.strftime("%Y-%m-%d 00:00:00.000") if user.birth_date else None
 
     # Определяем consent_status: 1 если rules_accepted=True, иначе 0 (unknown)
     consent_status = 1 if user.rules_accepted else 0
@@ -62,8 +62,10 @@ async def register_customer(user) -> Tuple[Optional[str], str]:
         birth_date=birth_date_str,
         sex=sex,
         email=user.email or "",
+        consent_status=consent_status,
         should_receive_promo=user.notifications_allowed,
-        should_receive_loyalty=user.notifications_allowed
+        should_receive_loyalty=user.notifications_allowed,
+        customer_id=customer_id
     )
 
 

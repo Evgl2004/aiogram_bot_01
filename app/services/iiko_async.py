@@ -157,11 +157,12 @@ class AsyncIikoApi:
             email: str = "",
             consent_status: int = 0,
             should_receive_promo: bool = True,
-            should_receive_loyalty: bool = True
+            should_receive_loyalty: bool = True,
+            customer_id: Optional[str] = None  # новый параметр
     ) -> Tuple[Optional[str], str]:
         """
         Регистрирует нового клиента или обновляет существующего.
-        Возвращает (customer_id, сообщение).
+        Если customer_id передан, обновляет существующего клиента.
         """
 
         token = await self._get_token()
@@ -173,7 +174,6 @@ class AsyncIikoApi:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}"
         }
-        # Формируем словарь с данными, исключая пустые значения
         data = {
             "phone": formatted_phone,
             "name": name,
@@ -182,25 +182,27 @@ class AsyncIikoApi:
             "consentStatus": consent_status,
             "organizationId": self.organization_id
         }
-        # Добавляем поля, только если они предоставлены
+        # Добавляем поля только если они предоставлены
         if surname:
-            data["surname"] = surname
+            data["surName"] = surname
         if middle_name:
             data["middleName"] = middle_name
         if birth_date:
-            data["birthDate"] = birth_date
+            data["birthday"] = birth_date
         if sex is not None:
             data["sex"] = sex
         if email:
             data["email"] = email
+        if customer_id:
+            data["id"] = customer_id  # добавляем id для обновления
 
         session = await self._get_session()
         try:
             async with session.post(
-                f"{self.base_url}/loyalty/iiko/customer/create_or_update",
-                headers=headers,
-                json=data,
-                timeout=aiohttp.ClientTimeout(total=10)
+                    f"{self.base_url}/loyalty/iiko/customer/create_or_update",
+                    headers=headers,
+                    json=data,
+                    timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status == 200:
                     response_data = await resp.json()

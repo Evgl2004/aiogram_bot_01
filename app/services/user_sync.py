@@ -57,7 +57,8 @@ async def sync_user_with_iiko(
         client_info = {'customer_id': customer_id, 'cards': []}
     else:
         # 3. Клиент существует – обновляем его данные
-        customer_id, upd_msg = await iiko_service.register_customer(user)  # create_or_update
+        existing_customer_id = client_info['customer_id']
+        customer_id, upd_msg = await iiko_service.register_customer(user, customer_id=existing_customer_id)
         if not customer_id:
             text = f"❌ Не удалось обновить данные в iiko.\nПричина: {upd_msg}"
             await edit_safe_message(obj, text, reply_markup=retry_keyboard())
