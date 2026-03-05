@@ -2,7 +2,7 @@
 Клавиатуры для системы модерации
 """
 
-from typing import List, Optional
+from typing import List
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -21,7 +21,6 @@ class ModerationKeyboard:
         builder.row(InlineKeyboardButton(text="🆕 Новые тикеты", callback_data="mod_tickets_open"))
         builder.row(InlineKeyboardButton(text="🔄 В работе", callback_data="mod_tickets_progress"))
         return builder.as_markup()
-
 
     @staticmethod
     def tickets_list(
