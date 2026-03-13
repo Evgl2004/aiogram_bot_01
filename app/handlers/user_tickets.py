@@ -153,11 +153,24 @@ async def user_reply_to_ticket(callback: CallbackQuery, state: FSMContext):
         f"📝 *Ответ на тикет #{ticket_id}*\n\n"
         f"Введите ваш ответ:"
     )
-    await safe_edit_message(
-        callback,
-        text,
-        reply_markup=UserTicketsKeyboard.cancel_reply(ticket_id)
-    )
+
+    # Отправляем сообщение и сохраняем его ID для последующего удаления
+    try:
+        sent_msg = await callback.message.edit_text(
+            text,
+            reply_markup=UserTicketsKeyboard.cancel_reply(ticket_id),
+            parse_mode="Markdown"
+        )
+    except Exception:
+        sent_msg = await callback.message.answer(
+            text,
+            reply_markup=UserTicketsKeyboard.cancel_reply(ticket_id),
+            parse_mode="Markdown"
+        )
+
+    # Сохраняем ID сообщения с клавиатурой отмены в состоянии
+    await state.update_data(cancel_message_id=sent_msg.message_id)
+
     await callback.answer()
 
 
@@ -212,6 +225,14 @@ async def user_send_reply(message: Message, state: FSMContext):
     # Получаем обновлённую историю переписки
     messages = await ticket_service.get_ticket_messages(ticket_id)
     ticket_text = format_ticket_details(ticket, messages)
+
+    # Удаляем сообщение с кнопкой "Отмена", если оно было сохранено
+    cancel_msg_id = data.get("cancel_message_id")
+    if cancel_msg_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=cancel_msg_id)
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение отмены: {e}")
 
     # Отправляем пользователю обновлённую карточку тикета
     await message.answer(

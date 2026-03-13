@@ -364,6 +364,14 @@ async def process_question_text(message: types.Message, state: FSMContext):
     # Очищаем состояние
     await state.clear()
 
+    # Возвращаем пользователя в главное меню
+    await show_main_menu(
+        chat_id=message.chat.id,
+        bot=message.bot,
+        state=state,
+        user_name=user.first_name_input or "Гость"
+    )
+
 
 @router.callback_query(lambda c: c.data == "support_contacts")
 async def process_contacts(callback: types.CallbackQuery):
