@@ -522,8 +522,8 @@ async def process_notifications_consent(callback: types.CallbackQuery, state: FS
     # Отвечаем на callback (убираем "часики" на кнопке)
     await callback.answer()
 
-    # Убираем клавиатуру из сообщения
-    await callback.message.edit_reply_markup(reply_markup=None)
+    # Удаляем сообщение с кнопками, чтобы оно не оставалось в чате
+    await callback.message.delete()
 
     # нужно получить объект пользователя
     user = await db.get_user(user_id)

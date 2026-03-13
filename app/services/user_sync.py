@@ -98,6 +98,17 @@ async def sync_user_with_iiko(
         else:
             await obj.answer_photo(photo=qr_photo, caption=caption)
 
+    welcome_text = (
+        "🎉 *Регистрация успешно завершена!*\n\n"
+        "Теперь вы можете пользоваться ботом.\n\n"
+        "💡 *Как пользоваться:*\n"
+        "• Нажмите на кнопки под сообщением для навигации по меню.\n"
+        "• Или введите символ `/` в поле ввода, чтобы увидеть список доступных команд.\n"
+        "• Команда `/start` всегда возвращает вас в главное меню.\n\n"
+        "Приятного использования!"
+    )
+    await send_safe_message(obj, welcome_text, parse_mode="Markdown")
+
     # Показываем главное меню
     await show_main_menu(
         chat_id=obj.message.chat.id,
